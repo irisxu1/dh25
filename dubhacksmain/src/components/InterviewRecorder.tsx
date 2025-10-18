@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Play, Square, Mic, Video } from 'lucide-react';
 import { useVoiceAnalysis } from '../hooks/useVoiceAnalysis';
-import { useFacialAnalysis } from '../hooks/useFacialAnalysis';
+import { elevenLabsService } from '../services/elevenLabsService';
 
 interface InterviewRecorderProps {
   onStop: (results: any) => void;
@@ -17,7 +17,7 @@ const InterviewRecorder: React.FC<InterviewRecorderProps> = ({ onStop }) => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { startVoiceAnalysis, stopVoiceAnalysis, voiceResults } = useVoiceAnalysis();
-  const { startFacialAnalysis, stopFacialAnalysis, facialResults } = useFacialAnalysis();
+  const [isPlayingQuestion, setIsPlayingQuestion] = useState(false);
 
   const questions = [
     "Tell me about yourself and your background.",
@@ -68,7 +68,6 @@ const InterviewRecorder: React.FC<InterviewRecorderProps> = ({ onStop }) => {
       mediaRecorderRef.current.start();
       setIsRecording(true);
       startVoiceAnalysis();
-      startFacialAnalysis(videoRef.current!);
     } catch (error) {
       console.error('Error accessing media devices:', error);
       alert('Please allow camera and microphone access to continue.');
@@ -86,12 +85,11 @@ const InterviewRecorder: React.FC<InterviewRecorderProps> = ({ onStop }) => {
       }
 
       stopVoiceAnalysis();
-      stopFacialAnalysis();
 
       // Combine results
       const results = {
         voice: voiceResults,
-        facial: facialResults,
+        transcript: voiceResults?.transcript || '',
         duration: recordingTime,
         question: questions[currentQuestion]
       };
@@ -106,13 +104,40 @@ const InterviewRecorder: React.FC<InterviewRecorderProps> = ({ onStop }) => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const playQuestionWithAI = async () => {
+    if (isPlayingQuestion) return;
+    
+    setIsPlayingQuestion(true);
+    try {
+      const audio = await elevenLabsService.generateQuestionAudio(questions[currentQuestion]);
+      if (audio) {
+        audio.onended = () => setIsPlayingQuestion(false);
+        audio.onerror = () => setIsPlayingQuestion(false);
+        await audio.play();
+      } else {
+        setIsPlayingQuestion(false);
+      }
+    } catch (error) {
+      console.error('Failed to play AI voice:', error);
+      setIsPlayingQuestion(false);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-8">
       <div className="text-center mb-6">
         <h2 className="text-2xl font-semibold mb-4">Practice Interview</h2>
         <div className="bg-gray-100 rounded-lg p-4 mb-4">
           <h3 className="font-medium mb-2">Question {currentQuestion + 1}:</h3>
-          <p className="text-gray-700">{questions[currentQuestion]}</p>
+          <p className="text-gray-700 mb-3">{questions[currentQuestion]}</p>
+          <button
+            onClick={playQuestionWithAI}
+            disabled={isPlayingQuestion}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 mx-auto"
+          >
+            <Play className="w-4 h-4" />
+            {isPlayingQuestion ? 'Playing...' : 'Play with AI Voice'}
+          </button>
         </div>
       </div>
 
@@ -140,12 +165,12 @@ const InterviewRecorder: React.FC<InterviewRecorderProps> = ({ onStop }) => {
         <div className="md:w-80">
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Video className="w-4 h-4" />
-              <span>Facial tracking active</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
               <Mic className="w-4 h-4" />
               <span>Voice analysis active</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Video className="w-4 h-4" />
+              <span>Video recording active</span>
             </div>
             
             <div className="pt-4">
