@@ -1,7 +1,9 @@
 import axios from 'axios';
 
 class ElevenLabsService {
-  private baseUrl = 'http://localhost:3001/api/elevenlabs';
+  private baseUrl = process.env.NODE_ENV === 'production' 
+    ? '/api/elevenlabs' 
+    : 'http://localhost:3001/api/elevenlabs';
 
   constructor() {
     // Use backend API instead of direct client
