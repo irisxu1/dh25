@@ -1,120 +1,118 @@
-import { elevenLabsService } from './elevenLabsService';
+export type AnalysisRequestMeta = {
+  company: string;
+  questionCount: number;
+};
 
-interface VoiceAnalysisResult {
-  fillerWords: number;
-  speakingRate: number;
-  volume: number;
-  clarity: number;
-  transcript: string;
-  sentiment: string;
-  confidence: number;
+function extractAnswerText(transcript: string): string {
+  const lines = transcript.split(/\n+/).map(s => s.trim());
+  const answers = lines
+    .filter(l => /^A\d+:\s*/i.test(l))
+    .map(l => l.replace(/^A\d+:\s*/i, ''))
+    .filter(t => t && t !== '[transcription unavailable]' && t !== '[Transcription failed]');
+  return answers.join(' ');
 }
 
-class VoiceAnalysisService {
-  private fillerWords = ['um', 'uh', 'like', 'you know', 'so', 'well', 'actually', 'basically', 'literally'];
+function parseQAPairs(transcript: string) {
+  const lines = transcript.split('\n').filter(line => line.trim());
+  const qaPairs = [];
+  
+  for (let i = 0; i < lines.length; i += 2) {
+    if (lines[i]?.startsWith('Q') && lines[i + 1]?.startsWith('A')) {
+      const question = lines[i].replace(/^Q\d+:\s*/, '');
+      const answer = lines[i + 1].replace(/^A\d+:\s*/, '');
+      qaPairs.push({
+        questionNumber: Math.floor(i / 2) + 1,
+        question,
+        answer
+      });
+    }
+  }
+  
+  return qaPairs;
+}
 
-  async analyzeVoice(audioBlob: Blob, transcript: string): Promise<VoiceAnalysisResult> {
+export async function analyzeTranscriptWithGemini(transcript: string, meta: AnalysisRequestMeta): Promise<any> {
+  const answersText = extractAnswerText(transcript);
+  const hasAnswers = answersText.trim().length > 0;
+  const qaPairs = parseQAPairs(transcript);
+
+  // Try backend OpenAI API first
+  if (hasAnswers && qaPairs.length > 0) {
     try {
-      let finalTranscript = transcript;
-      let confidence = 75;
-      
-      // Use ElevenLabs for transcription if we have audio
-      try {
-        const elevenLabsTranscript = await elevenLabsService.speechToText(audioBlob);
-        if (elevenLabsTranscript && elevenLabsTranscript.trim().length > 0) {
-          finalTranscript = elevenLabsTranscript;
-          confidence = 90; // Higher confidence with ElevenLabs transcription
-        }
-      } catch (error) {
-        console.log('ElevenLabs transcription failed, using basic transcript:', error);
+      const res = await fetch('http://localhost:3001/api/openai/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          transcript, 
+          qaPairs,
+          meta 
+        })
+      });
+      if (res.ok) {
+        return await res.json();
       }
-      
-      // Basic analysis from transcript
-      const words = finalTranscript.toLowerCase().split(/\s+/);
-      const fillerWordCount = this.countFillerWords(words);
-      const speakingRate = this.calculateSpeakingRate(words, 30); // Assume 30 seconds for now
-      
-      // Analyze sentiment
-      const sentiment = this.analyzeSentiment(finalTranscript);
-
-      return {
-        fillerWords: fillerWordCount,
-        speakingRate: Math.round(speakingRate),
-        volume: this.estimateVolume(audioBlob),
-        clarity: this.estimateClarity(finalTranscript),
-        transcript: finalTranscript,
-        sentiment,
-        confidence
-      };
     } catch (error) {
-      console.error('Voice analysis error:', error);
-      // Return fallback analysis
-      return this.getFallbackAnalysis(transcript);
+      console.warn('OpenAI API failed, using fallback:', error);
     }
   }
 
-  private countFillerWords(words: string[]): number {
-    return words.filter(word => 
-      this.fillerWords.includes(word.replace(/[^\w]/g, ''))
-    ).length;
-  }
-
-  private calculateSpeakingRate(words: string[], durationSeconds: number): number {
-    const durationMinutes = durationSeconds / 60;
-    return words.length / durationMinutes;
-  }
-
-  private estimateVolume(audioBlob: Blob): number {
-    // This is a simplified volume estimation
-    // In a real implementation, you'd analyze the audio data
-    const size = audioBlob.size;
-    if (size > 100000) return 85; // Large file = loud
-    if (size > 50000) return 75;  // Medium file = medium
-    return 65; // Small file = quiet
-  }
-
-  private estimateClarity(transcript: string): number {
-    // Simple clarity estimation based on transcript quality
-    const words = transcript.split(/\s+/);
-    const clearWords = words.filter(word => word.length > 1 && /^[a-zA-Z]+$/.test(word));
-    return Math.round((clearWords.length / words.length) * 100);
-  }
-
-  private analyzeSentiment(transcript: string): string {
-    const positiveWords = ['good', 'great', 'excellent', 'amazing', 'wonderful', 'confident', 'excited'];
-    const negativeWords = ['bad', 'terrible', 'awful', 'nervous', 'worried', 'scared', 'difficult'];
-    
-    const words = transcript.toLowerCase().split(/\s+/);
-    const positiveCount = words.filter(word => positiveWords.includes(word)).length;
-    const negativeCount = words.filter(word => negativeWords.includes(word)).length;
-    
-    if (positiveCount > negativeCount) return 'positive';
-    if (negativeCount > positiveCount) return 'negative';
-    return 'neutral';
-  }
-
-  private getFallbackAnalysis(transcript: string): VoiceAnalysisResult {
-    const words = transcript.split(/\s+/);
+  if (!hasAnswers) {
     return {
-      fillerWords: this.countFillerWords(words),
-      speakingRate: 140,
-      volume: 75,
-      clarity: 80,
-      transcript,
-      sentiment: 'neutral',
-      confidence: 60
+      summary: 'We could not detect clear spoken answers from the transcript. Please ensure your mic permissions are granted and try again.',
+      metrics: {
+        fillerWords: 0,
+        speakingRateWpm: 0
+      },
+      questionAnalysis: [],
+      decision: { pass: false, rationale: 'Insufficient transcript to evaluate.' }
     };
   }
 
-  // Generate AI voice for interview questions
-  async generateQuestionVoice(question: string): Promise<HTMLAudioElement | null> {
-    try {
-      return await elevenLabsService.generateQuestionAudio(question);
-    } catch (error) {
-      console.error('Failed to generate AI voice:', error);
-      return null;
-    }
-  }
-}
+  // Fallback analysis
+  const fillerMatches = answersText.match(/\b(um+|uh+|like|you know|basically|actually)\b/gi) ?? [];
+  const words = answersText.trim().split(/\s+/).filter(Boolean);
+  const minutes = Math.max(1, words.length / 150);
+  const speakingRateWpm = Math.round(words.length / minutes);
+  const fillerWords = fillerMatches.length;
 
-export const voiceAnalysisService = new VoiceAnalysisService();
+  // Basic STAR method detection
+  const starKeywords = ['situation', 'task', 'action', 'result', 'challenge', 'problem', 'solution', 'outcome'];
+  const hasStarElements = starKeywords.some(keyword => 
+    answersText.toLowerCase().includes(keyword)
+  );
+
+  // Generate per-question analysis
+  const questionAnalysis = qaPairs.map((qa, index) => {
+    const answerWords = qa.answer.toLowerCase();
+    const hasStar = starKeywords.some(keyword => answerWords.includes(keyword));
+    const relevance = Math.min(100, Math.max(0, 60 + Math.random() * 30)); // Placeholder
+    
+    return {
+      questionNumber: qa.questionNumber,
+      question: qa.question,
+      answer: qa.answer,
+      starMethod: hasStar,
+      relevance: Math.round(relevance),
+      feedback: hasStar 
+        ? 'Good use of structured response with specific examples'
+        : 'Consider using the STAR method (Situation, Task, Action, Result) for more structured answers'
+    };
+  });
+
+  const pass = fillerWords <= 10 && speakingRateWpm >= 100 && speakingRateWpm <= 200;
+
+  return {
+    summary: 'Analysis completed using fallback method. Connect Gemini API for more detailed insights.',
+    metrics: { 
+      fillerWords, 
+      speakingRateWpm
+    },
+    questionAnalysis,
+    decision: { 
+      pass, 
+      rationale: pass 
+        ? 'Meets baseline performance standards' 
+        : 'Falls below one or more thresholds (filler words, speaking rate)' 
+    }
+  };
+}
