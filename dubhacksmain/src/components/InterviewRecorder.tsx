@@ -205,7 +205,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [company]); // Added company dependency since we're using company-specific questions
+  }, [company, QUESTIONS]); // Added company and QUESTIONS dependencies
 
   // Helper function to extract audio from video for transcription
   const extractAudioFromVideo = async (videoBlob: Blob): Promise<Blob> => {
@@ -213,8 +213,8 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
       console.log('Extracting audio from video blob:', videoBlob.size, 'bytes, type:', videoBlob.type);
       
       const video = document.createElement('video');
-      const canvas = document.createElement('canvas');
-      const audioContext = new AudioContext();
+      // const canvas = document.createElement('canvas');
+      // const audioContext = new AudioContext();
       
       video.src = URL.createObjectURL(videoBlob);
       

@@ -5,9 +5,6 @@ class GeminiService {
     ? '/api/gemini' 
     : 'http://localhost:3001/api/gemini';
 
-  constructor() {
-    // Use backend API for Gemini calls
-  }
 
   // Analyze interview transcript using Gemini
   async analyzeInterview(transcript: string, company: string, questionCount: number): Promise<any> {

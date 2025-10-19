@@ -5,9 +5,6 @@ class ElevenLabsService {
     ? '/api/elevenlabs' 
     : 'http://localhost:3001/api/elevenlabs';
 
-  constructor() {
-    // Use backend API instead of direct client
-  }
 
   async textToSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<string> {
     try {
