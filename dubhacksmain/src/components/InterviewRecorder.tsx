@@ -325,8 +325,8 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     setIsRecording(true);
     setRecordingTime(0);
     setStatus('Recording your answer...');
-    chunksRef.current = [];
-    
+      chunksRef.current = [];
+
     // Start recording timer immediately
     recordingTimerRef.current = setInterval(() => {
       setRecordingTime(prev => prev + 1);
@@ -373,7 +373,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
         // The onstop event handler will handle the rest
         // We don't need to manually progress here as it's handled in the onstop callback
         
-      } catch (error) {
+    } catch (error) {
         console.error('Failed to stop recording:', error);
         setStatus('Failed to stop recording. Please try again.');
       }
@@ -551,7 +551,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     <div className="bg-white rounded-2xl shadow-lg p-6 space-y-6 border border-pink-200">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
-          ✨ Interview Practice ✨
+          Interview Practice
         </h2>
         <div className="flex items-center gap-4">
               <div className="text-sm font-medium text-pink-600 bg-pink-100 px-3 py-1 rounded-full">
@@ -576,7 +576,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
           <p className="text-pink-700 text-lg leading-relaxed">{QUESTIONS[currentQuestion]}</p>
           {currentQuestion === QUESTIONS.length - 1 && (
             <p className="text-pink-600 text-sm mt-2 font-medium">
-              🎉 This is your last question! You can end the interview anytime.
+              This is your last question! You can end the interview anytime.
             </p>
           )}
         </div>
@@ -599,7 +599,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
           <div className="inline-flex items-center gap-2 bg-gradient-to-r from-yellow-100 to-pink-100 text-pink-800 px-6 py-3 rounded-2xl border border-pink-200">
             <Clock className="w-5 h-5" />
             <span className="font-bold text-lg">
-              {isThinking ? `💭 Think: ${thinkingTime}s` : `🎬 Recording: ${formatTime(recordingTime)}`}
+              {isThinking ? `Think: ${thinkingTime}s` : `Recording: ${formatTime(recordingTime)}`}
             </span>
           </div>
         </div>
@@ -607,20 +607,20 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
 
       {/* Video Display */}
       <div className="relative bg-black rounded-2xl overflow-hidden border-2 border-pink-200">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
           className="w-full h-[32rem] object-cover transform scale-x-[-1]"
           style={{ transform: 'scaleX(-1)' }}
-        />
-        {isRecording && (
+            />
+            {isRecording && (
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-lg">
             <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-            <span className="text-sm font-bold">🎬 REC {formatTime(recordingTime)}</span>
+            <span className="text-sm font-bold">REC {formatTime(recordingTime)}</span>
           </div>
         )}
-      </div>
+        </div>
 
           {/* Control Buttons */}
           <div className="flex gap-4 justify-center">
@@ -630,24 +630,24 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
                 onClick={askQuestion}
               >
                 <Play className="w-6 h-6" />
-                🎤 Ask Question
+                Ask Question
               </button>
             )}
 
             {isThinking && (
-              <button
+                <button
                 className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={skipThinking}
-              >
+                >
                 <Mic className="w-6 h-6" />
                 ⚡ Skip & Start Recording
-              </button>
+                </button>
             )}
 
             {isRecording && (
-              <button
+                <button
                 className="px-10 py-5 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-bold hover:from-red-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-xl flex items-center gap-3 animate-pulse"
-                onClick={stopRecording}
+                  onClick={stopRecording}
               >
                 <Square className="w-7 h-7" />
                 🛑 Stop Recording ({formatTime(recordingTime)})
@@ -672,7 +672,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />
-                ✨ Go to Summary
+                Go to Summary
               </button>
             )}
 
@@ -683,7 +683,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />
-                ✨ End Interview & Go to Summary
+                End Interview & Go to Summary
               </button>
             )}
 
@@ -694,9 +694,9 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />
-                🎯 Go to Summary Now
-              </button>
-            )}
+                Go to Summary Now
+                </button>
+              )}
 
           </div>
 

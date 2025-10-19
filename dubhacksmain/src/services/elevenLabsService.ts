@@ -33,25 +33,8 @@ class ElevenLabsService {
 
   // Get a professional voice suitable for interview questions
   async getInterviewVoice(): Promise<string> {
-    try {
-      const voices = await this.getVoices();
-      // Look for professional voices (Adam, Bella, etc.)
-      const professionalVoices = voices.filter((voice: any) => 
-        voice.name.toLowerCase().includes('adam') || 
-        voice.name.toLowerCase().includes('bella') ||
-        voice.name.toLowerCase().includes('professional')
-      );
-      
-      if (professionalVoices.length > 0) {
-        return professionalVoices[0].voice_id;
-      }
-      
-      // Fallback to first available voice
-      return voices.length > 0 ? voices[0].voice_id : 'pNInz6obpgDQGcFmaJgB';
-    } catch (error) {
-      console.error('Error getting interview voice:', error);
-      return 'pNInz6obpgDQGcFmaJgB'; // Default professional voice
-    }
+    // Use a hardcoded professional voice ID to avoid voices_read permission issue
+    return 'pNInz6obpgDQGcFmaJgB'; // Adam - professional voice
   }
 
 

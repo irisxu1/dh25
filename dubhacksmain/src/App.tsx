@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from './services/supabaseClient';
-import LoginModal from './components/LoginModal';
+import { Auth } from '@supabase/auth-ui-react';
+import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { Mic, Video, BarChart3 } from 'lucide-react';
 import InterviewRecorder from './components/InterviewRecorder';
 import FeedbackDashboard from './components/FeedbackDashboard';
@@ -12,13 +13,21 @@ export type Company = 'Amazon' | 'T-Mobile' | 'Atlassian' | 'Statsig' | 'ElevenL
 const AVAILABLE_COMPANIES: Company[] = ['Amazon', 'T-Mobile', 'Atlassian', 'Statsig', 'ElevenLabs'];
 
 function App() {
+  const [session, setSession] = useState<any>(null);
   const [currentState, setCurrentState] = useState<AppState>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>('Amazon');
 
   useEffect(() => {
-    // Subscribe to auth changes and ensure a profile row exists
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+    supabase.auth.getSession().then(({ data: { session } }: { data: { session: any } }) => {
+      setSession(session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+      setSession(session);
+      
       if (event === 'SIGNED_IN' && session?.user) {
         const user = session.user;
 
@@ -51,10 +60,7 @@ function App() {
       }
     });
 
-    // Cleanup subscription on unmount
-    return () => {
-      sub?.subscription?.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleStartRecording = () => {
@@ -80,13 +86,55 @@ function App() {
     setAnalysisResults(null);
   };
 
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-yellow-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">
+              Rehearsal Room
+            </h1>
+            <p className="text-lg text-gray-600">
+              Master your interviews with AI-powered voice and video analysis
+            </p>
+          </div>
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-pink-200">
+            <Auth 
+              supabaseClient={supabase} 
+              appearance={{ 
+                theme: ThemeSupa,
+                variables: {
+                  default: {
+                    colors: {
+                      brand: '#EC4899',
+                      brandAccent: '#F59E0B',
+                    }
+                  }
+                }
+              }} 
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-yellow-50">
       <div className="container mx-auto px-4 py-8">
         <header className="text-center mb-8">
-          <h1 className="text-5xl font-bold text-gray-800 mb-2">
-            Rehearsal Room
-          </h1>
+          <div className="flex items-center justify-between mb-4">
+            <div></div>
+            <h1 className="text-5xl font-bold text-gray-800">
+              Rehearsal Room
+            </h1>
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm"
+            >
+              Sign Out
+            </button>
+          </div>
           <p className="text-xl text-gray-600">
             Master your interviews with AI-powered voice and video analysis
           </p>
@@ -167,9 +215,9 @@ function App() {
             <div className="bg-white rounded-2xl shadow-lg p-8 text-center border border-pink-200">
               <div className="animate-spin w-16 h-16 border-4 border-pink-500 border-t-transparent rounded-full mx-auto mb-6"></div>
               <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
-                ✨ Analyzing Your Performance ✨
+                Analyzing Your Performance
               </h2>
-              <p className="text-lg text-gray-600">🎬 Processing your video and voice data...</p>
+              <p className="text-lg text-gray-600">Processing your video and voice data...</p>
             </div>
           )}
 
