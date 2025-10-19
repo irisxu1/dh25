@@ -12,16 +12,24 @@ if (!ELEVENLABS_API_KEY) {
 }
 
 // Initialize ElevenLabs client
-const elevenlabs = new ElevenLabsClient({
-  apiKey: ELEVENLABS_API_KEY
-});
+let elevenlabs = null;
+if (ELEVENLABS_API_KEY) {
+  try {
+    elevenlabs = new ElevenLabsClient({
+      apiKey: ELEVENLABS_API_KEY
+    });
+    console.log('ElevenLabs client initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize ElevenLabs client:', error);
+  }
+}
 
 // Text-to-Speech endpoint
 router.post('/text-to-speech', async (req, res) => {
   try {
-    if (!ELEVENLABS_API_KEY) {
+    if (!ELEVENLABS_API_KEY || !elevenlabs) {
       return res.status(500).json({ 
-        error: 'ElevenLabs API key not configured',
+        error: 'ElevenLabs API key not configured or client failed to initialize',
         details: 'Please set ELEVENLABS_API_KEY in your .env file'
       });
     }
@@ -78,9 +86,9 @@ router.post('/text-to-speech', async (req, res) => {
 // Speech-to-Text endpoint
 router.post('/speech-to-text', async (req, res) => {
   try {
-    if (!ELEVENLABS_API_KEY) {
+    if (!ELEVENLABS_API_KEY || !elevenlabs) {
       return res.status(500).json({ 
-        error: 'ElevenLabs API key not configured',
+        error: 'ElevenLabs API key not configured or client failed to initialize',
         details: 'Please set ELEVENLABS_API_KEY in your .env file'
       });
     }

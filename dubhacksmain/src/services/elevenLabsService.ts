@@ -10,7 +10,7 @@ class ElevenLabsService {
     try {
       console.log('Calling ElevenLabs TTS:', { text: text.substring(0, 50) + '...', voiceId, baseUrl: this.baseUrl });
       
-      const response = await axios.post(`${this.baseUrl}/elevenlabs-text-to-speech`, {
+      const response = await axios.post(`${this.baseUrl}/text-to-speech`, {
         text: text,
         voiceId: voiceId
       });
@@ -33,7 +33,7 @@ class ElevenLabsService {
 
   async getVoices(): Promise<any[]> {
     try {
-      const response = await axios.get(`${this.baseUrl}/elevenlabs-voices`);
+      const response = await axios.get(`${this.baseUrl}/voices`);
       return response.data.voices || [];
     } catch (error) {
       console.error('Error fetching voices:', error);
@@ -78,9 +78,9 @@ class ElevenLabsService {
       const formData = new FormData();
       formData.append('audio', audioBlob);
 
-      console.log('Sending request to:', `${this.baseUrl}/elevenlabs-speech-to-text`);
+      console.log('Sending request to:', `${this.baseUrl}/speech-to-text`);
       
-      const response = await axios.post(`${this.baseUrl}/elevenlabs-speech-to-text`, formData, {
+      const response = await axios.post(`${this.baseUrl}/speech-to-text`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
