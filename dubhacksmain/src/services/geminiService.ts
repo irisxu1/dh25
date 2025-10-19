@@ -2,7 +2,7 @@ import axios from 'axios';
 
 class GeminiService {
   private baseUrl = process.env.NODE_ENV === 'production' 
-    ? '/api/gemini' 
+    ? '/api' 
     : 'http://localhost:3001/api/gemini';
 
 
@@ -11,7 +11,7 @@ class GeminiService {
     try {
       console.log('Starting Gemini interview analysis...');
       
-      const response = await axios.post(`${this.baseUrl}/analyze-interview`, {
+      const response = await axios.post(`${this.baseUrl}/gemini-analyze-interview`, {
         fullTranscript: transcript,
         company: company,
         questionCount: questionCount
