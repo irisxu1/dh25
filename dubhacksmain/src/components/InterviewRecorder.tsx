@@ -7,25 +7,61 @@ import type { Company } from '../App';
 interface InterviewRecorderProps {
   company: Company;
   onStop: (results: any) => void;
+  onCancel: () => void;
 }
 
-const QUESTIONS = [
-  "Tell me about yourself and your background.",
-  "What are your greatest strengths?",
-  "Describe a challenging situation you've faced and how you handled it.",
-  "Where do you see yourself in 5 years?",
-  "Why do you want to work for our company?"
-];
+// Company-specific question sets
+const COMPANY_QUESTIONS: Record<Company, string[]> = {
+  Amazon: [
+    "Describe a time when you used data to make a decision.",
+    "Tell me about a time you disagreed with your manager. How did you handle it?",
+    "Describe a situation where you had to prioritize multiple tasks.",
+    "Give an example of when you went above and beyond for a customer.",
+    "How do you handle tight deadlines while maintaining quality?",
+  ],
+  "T-Mobile": [
+    "How would you handle a dissatisfied customer?",
+    "Tell me about a time you collaborated with a team to meet a goal.",
+    "Describe a situation where innovation led to success.",
+    "How do you keep yourself motivated in a fast-paced environment?",
+    "What does the T-Mobile brand mean to you?",
+  ],
+  Atlassian: [
+    "Describe a time when you improved a process or workflow.",
+    "How do you handle feedback from multiple stakeholders?",
+    "Tell me about a technical project you’re proud of.",
+    "How do you ensure collaboration within distributed teams?",
+    "Which Atlassian product do you admire and why?",
+  ],
+  ElevenLabs: [
+    "What excites you about voice AI and speech synthesis?",
+    "Tell me about a project where you used AI or ML tools.",
+    "Describe a time when creativity helped you solve a technical challenge.",
+    "How would you evaluate the quality of generated voice data?",
+    "How do you stay current with advances in AI research?",
+  ],
+  Statsig: [
+    "What is your experience with A/B testing or experimentation?",
+    "Tell me about a time you used data to validate an assumption.",
+    "How would you design an experiment to test a new product feature?",
+    "Describe a situation where data contradicted your expectations.",
+    "How would you explain statistical significance to a non-technical audience?",
+  ],
+};
 
-export default function InterviewRecorder({ company, onStop }: InterviewRecorderProps) {
+
+export default function InterviewRecorder({ company, onStop, onCancel }: InterviewRecorderProps) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
+  // Use the questions for the selected company
+  const QUESTIONS = COMPANY_QUESTIONS[company];
   const [isRecording, setIsRecording] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [thinkingTime, setThinkingTime] = useState(30);
+  const [thinkingTime, setThinkingTime] = useState(5);
   const [recordingTime, setRecordingTime] = useState(0);
   const [status, setStatus] = useState('Click "Ask Question" to begin.');
   const [transcript, setTranscript] = useState<string>('');
   const [recordings, setRecordings] = useState<any[]>([]);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -33,6 +69,15 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
   const streamRef = useRef<MediaStream | null>(null);
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentQuestionRef = useRef<number>(0);
+  const isTranscribingRef = useRef<boolean>(false);
+
+  // Update the ref whenever currentQuestion changes
+  useEffect(() => {
+    currentQuestionRef.current = currentQuestion;
+  }, [currentQuestion]);
+
+
 
   useEffect(() => {
     let isMounted = true;
@@ -40,9 +85,13 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
     // Setup camera and microphone access
     const setupMedia = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 1280, height: 720 },
-          audio: true 
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            aspectRatio: { ideal: 16/9 }
+          },
+          audio: true
         });
         
         if (!isMounted) {
@@ -78,7 +127,6 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
         
         mr.onstop = async () => {
           if (chunksRef.current.length === 0) {
-            console.log('No audio/video data recorded');
             setStatus('No recording data captured. Please try again.');
             return;
           }
@@ -89,30 +137,114 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
           // Create video URL for playback
           const videoUrl = URL.createObjectURL(videoBlob);
           
+          // Get current question from ref
+          const currentQ = currentQuestionRef.current;
+          
+          // Save video locally with company naming
+          const fileName = `${company.toLowerCase().replace(/\s+/g, '')}q${currentQ + 1}.webm`;
+          const link = document.createElement('a');
+          link.href = videoUrl;
+          link.download = fileName;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
           // Store the video recording
           setRecordings(prev => [...prev, {
-            questionNumber: currentQuestion + 1,
-            question: QUESTIONS[currentQuestion],
+            questionNumber: currentQ + 1,
+            question: QUESTIONS[currentQ],
             videoUrl,
             videoBlob,
-            size: videoBlob.size
+            size: videoBlob.size,
+            fileName: fileName
           }]);
           
-          // Extract audio for transcription
-          const audioBlob = await extractAudioFromVideo(videoBlob);
+          // Progress to next question immediately (don't wait for transcription)
+          // But if it's the last question, wait for transcription to complete
+          const nextQuestion = currentQuestionRef.current + 1;
+          const isLastQuestion = nextQuestion >= QUESTIONS.length;
           
-          // Transcribe the audio
-          setStatus('Transcribing your answer...');
-          try {
-            const transcription = await elevenLabsService.speechToText(audioBlob);
-            const answerText = transcription || '';
-            
-            // Store the answer for this question
-            setTranscript(prev => prev + `\nQ${currentQuestion + 1}: ${QUESTIONS[currentQuestion]}\nA${currentQuestion + 1}: ${answerText}\n`);
-          } catch (error) {
-            console.error('Transcription failed:', error);
-            setTranscript(prev => prev + `\nQ${currentQuestion + 1}: ${QUESTIONS[currentQuestion]}\nA${currentQuestion + 1}: [Transcription failed]\n`);
+          if (isLastQuestion) {
+            // For the last question, show completion status and wait for user to go to summary
+            console.log('Last question completed, showing completion status');
+            setStatus('Interview completed! Click "Go to Summary" when ready.');
+          } else {
+            // For other questions, progress immediately
+            setTimeout(() => {
+              console.log('Progressing from question', currentQuestionRef.current, 'to', nextQuestion, 'of', QUESTIONS.length, 'total questions');
+              if (QUESTIONS.length === 0) {
+                console.log('Questions not loaded, cannot progress');
+                return;
+              }
+              setCurrentQuestion(nextQuestion);
+              setStatus('Click "Ask Question" for the next question.');
+            }, 1000);
           }
+          
+          // Transcribe the audio in the background (don't block progression)
+          setIsTranscribing(true);
+          isTranscribingRef.current = true;
+          const transcriptionPromise = extractAudioFromVideo(videoBlob).then(audioBlob => {
+            setStatus('Transcribing your answer...');
+            return elevenLabsService.speechToText(audioBlob);
+          }).then(transcription => {
+            const answerText = transcription || '';
+            // Store the answer for this question
+            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: ${answerText}\n`);
+            setIsTranscribing(false);
+            isTranscribingRef.current = false;
+            
+            // If this was the last question, update status to show completion
+            if (isLastQuestion) {
+              console.log('Last question transcription completed');
+              setStatus('Interview completed! Click "Go to Summary" when ready.');
+            }
+          }).catch(error => {
+            console.error('Transcription failed:', error);
+            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription failed]\n`);
+            setIsTranscribing(false);
+            isTranscribingRef.current = false;
+            
+            // If this was the last question, update status to show completion
+            if (isLastQuestion) {
+              console.log('Last question transcription failed, but interview is complete');
+              setStatus('Interview completed! Click "Go to Summary" when ready.');
+            }
+          });
+          
+          // Auto-progress after 5 seconds if transcription is still running
+          setTimeout(() => {
+            if (isTranscribingRef.current) {
+              console.log('Auto-progressing after 5 seconds - transcription still running');
+              setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription in progress - auto-skipped]\n`);
+              setIsTranscribing(false);
+              isTranscribingRef.current = false;
+              
+              // If this was the last question, update status to show completion
+              if (isLastQuestion) {
+                console.log('Last question auto-skipped, interview complete');
+                setStatus('Interview completed! Click "Go to Summary" when ready.');
+              }
+            }
+          }, 5000); // 5 second auto-progress
+          
+          // Add a longer timeout to prevent transcription from hanging completely
+          const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Transcription timeout')), 30000); // 30 second timeout
+          });
+          
+          Promise.race([transcriptionPromise, timeoutPromise]).catch(error => {
+            console.error('Transcription timeout or failed:', error);
+            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription timeout]\n`);
+            setIsTranscribing(false);
+            isTranscribingRef.current = false;
+            
+            // If this was the last question, update status to show completion
+            if (isLastQuestion) {
+              console.log('Last question transcription timed out, interview complete');
+              setStatus('Interview completed! Click "Go to Summary" when ready.');
+            }
+          });
         };
         
         mediaRecorderRef.current = mr;
@@ -139,7 +271,7 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, []);
+  }, [company]); // Added company dependency since we're using company-specific questions
 
   // Helper function to extract audio from video for transcription
   const extractAudioFromVideo = async (videoBlob: Blob): Promise<Blob> => {
@@ -158,8 +290,13 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
   };
 
   const askQuestion = async () => {
+    console.log('Ask question called - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'QUESTIONS array:', QUESTIONS);
+    if (QUESTIONS.length === 0) {
+      console.log('Questions not loaded yet, waiting...');
+      return;
+    }
     if (currentQuestion >= QUESTIONS.length) return;
-    
+
     const question = QUESTIONS[currentQuestion];
     setStatus('Interviewer is asking the question...');
     
@@ -200,52 +337,66 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
     startRecording();
   };
 
+  const nextQuestion = () => {
+    console.log('Next question called - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length);
+    if (QUESTIONS.length === 0) {
+      console.log('Questions not loaded, cannot progress');
+      return;
+    }
+    if (currentQuestion < QUESTIONS.length - 1) {
+      setCurrentQuestion(prev => prev + 1);
+      setStatus('Click "Ask Question" for the next question.');
+    } else {
+      setStatus('Analyzing your interview...');
+      analyzeInterview();
+    }
+  };
+
+  const goToSummary = () => {
+    console.log('Go to summary called - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length);
+    setStatus('Analyzing your interview...');
+    analyzeInterview();
+  };
+
   const startRecording = () => {
+    // Clear any existing recording timer first
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+    }
+    
+    // Always set recording state to true first, regardless of MediaRecorder state
+    setIsRecording(true);
+    setRecordingTime(0);
+    setStatus('Recording your answer...');
+    chunksRef.current = [];
+    
+    // Start recording timer immediately
+    recordingTimerRef.current = setInterval(() => {
+      setRecordingTime(prev => prev + 1);
+    }, 1000);
+    
     if (!mediaRecorderRef.current) {
-      console.log('MediaRecorder not initialized');
-      setStatus('MediaRecorder not ready. Please wait and try again.');
       return;
     }
     
     // Check if MediaRecorder is already recording
     if (mediaRecorderRef.current.state === 'recording') {
-      console.log('MediaRecorder is already recording');
       return;
     }
     
     // Check if MediaRecorder is in a valid state
     if (mediaRecorderRef.current.state === 'inactive') {
-      setIsRecording(true);
-      setRecordingTime(0);
-      setStatus('Recording your answer...');
-      chunksRef.current = [];
-      
       try {
         mediaRecorderRef.current.start(100); // Start with 100ms timeslice
-        console.log('Recording started successfully');
-        
-        // Start recording timer
-        recordingTimerRef.current = setInterval(() => {
-          setRecordingTime(prev => prev + 1);
-        }, 1000);
       } catch (error) {
-        console.error('Failed to start recording:', error);
-        setIsRecording(false);
-        setStatus('Failed to start recording. Please try again.');
+        console.error('Failed to start MediaRecorder:', error);
+        // Don't set isRecording to false here - keep the button showing
       }
-    } else {
-      console.log('MediaRecorder in invalid state:', mediaRecorderRef.current.state);
-      setStatus('MediaRecorder not ready. Please try again.');
     }
   };
 
   const stopRecording = async () => {
-    if (!mediaRecorderRef.current || !isRecording) return;
-    
-    // Check if MediaRecorder is actually recording
-    if (mediaRecorderRef.current.state !== 'recording') {
-      console.log('MediaRecorder is not recording');
-      setIsRecording(false);
+    if (!isRecording) {
       return;
     }
     
@@ -257,27 +408,40 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
       clearInterval(recordingTimerRef.current);
     }
     
-    try {
-      mediaRecorderRef.current.stop();
-      
-      // Wait a moment for transcription to complete
+    // Try to stop MediaRecorder if it exists and is recording
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      try {
+        mediaRecorderRef.current.stop();
+        
+        // The onstop event handler will handle the rest
+        // We don't need to manually progress here as it's handled in the onstop callback
+        
+      } catch (error) {
+        console.error('Failed to stop recording:', error);
+        setStatus('Failed to stop recording. Please try again.');
+      }
+    } else {
+      // If MediaRecorder wasn't actually recording, manually progress to next question
       setTimeout(() => {
-        if (currentQuestion < QUESTIONS.length - 1) {
-          setCurrentQuestion(prev => prev + 1);
+        const nextQuestion = currentQuestionRef.current + 1;
+        if (QUESTIONS.length === 0) {
+          console.log('Questions not loaded, cannot progress manually');
+          return;
+        }
+        if (nextQuestion < QUESTIONS.length) {
+          setCurrentQuestion(nextQuestion);
           setStatus('Click "Ask Question" for the next question.');
         } else {
-          // All questions completed, analyze with Gemini
+          // All questions completed, analyze with OpenAI
           setStatus('Analyzing your interview...');
           analyzeInterview();
         }
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      setStatus('Failed to stop recording. Please try again.');
+      }, 1000);
     }
   };
 
   const analyzeInterview = async () => {
+    console.log('Analyzing interview - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'transcript length:', transcript.length);
     try {
       const analysis = await analyzeTranscriptWithGemini(transcript, {
         company: company,
@@ -317,25 +481,44 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
         <h2 className="text-2xl font-bold bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
           ✨ Interview Practice ✨
         </h2>
-        <div className="text-sm font-medium text-pink-600 bg-pink-100 px-3 py-1 rounded-full">
-          Question {currentQuestion + 1} of {QUESTIONS.length}
+        <div className="flex items-center gap-4">
+              <div className="text-sm font-medium text-pink-600 bg-pink-100 px-3 py-1 rounded-full">
+                Question {currentQuestion + 1} of {QUESTIONS.length}
+              </div>
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-xl bg-gray-500 hover:bg-gray-600 text-white font-medium transition-colors"
+          >
+            Cancel
+          </button>
         </div>
       </div>
 
       {/* Current Question Display */}
-      {currentQuestion < QUESTIONS.length && (
+      {QUESTIONS.length > 0 && currentQuestion < QUESTIONS.length && (
         <div className="bg-gradient-to-r from-pink-50 to-yellow-50 rounded-2xl p-6 border border-pink-200">
           <h3 className="font-bold text-pink-800 mb-3 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-pink-500" />
-            Current Question:
+            {currentQuestion === QUESTIONS.length - 1 ? 'Final Question:' : 'Current Question:'}
           </h3>
           <p className="text-pink-700 text-lg leading-relaxed">{QUESTIONS[currentQuestion]}</p>
+          {currentQuestion === QUESTIONS.length - 1 && (
+            <p className="text-pink-600 text-sm mt-2 font-medium">
+              🎉 This is your last question! You can end the interview anytime.
+            </p>
+          )}
         </div>
       )}
 
       {/* Status Display */}
       <div className="p-4 bg-gradient-to-r from-pink-50 to-yellow-50 rounded-2xl border border-pink-200">
         <p className="text-sm text-pink-700 font-medium">{status}</p>
+        {isRecording && (
+          <div className="mt-2 flex items-center gap-2">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+            <span className="text-red-600 font-bold">Recording: {formatTime(recordingTime)}</span>
+          </div>
+        )}
       </div>
 
       {/* Timer Display */}
@@ -356,55 +539,115 @@ export default function InterviewRecorder({ company, onStop }: InterviewRecorder
           ref={videoRef}
           autoPlay
           muted
-          className="w-full h-64 object-cover"
+          className="w-full h-[32rem] object-cover transform scale-x-[-1]"
+          style={{ transform: 'scaleX(-1)' }}
         />
         {isRecording && (
           <div className="absolute top-4 left-4 flex items-center gap-2 bg-gradient-to-r from-red-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-lg">
             <div className="w-3 h-3 bg-white rounded-full animate-pulse"></div>
-            <span className="text-sm font-bold">🎬 REC</span>
+            <span className="text-sm font-bold">🎬 REC {formatTime(recordingTime)}</span>
           </div>
         )}
       </div>
 
-      {/* Control Buttons */}
-      <div className="flex gap-4 justify-center">
-        {!isThinking && !isRecording && currentQuestion < QUESTIONS.length && (
-          <button
-            className="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-500 to-yellow-500 text-white font-bold hover:from-pink-600 hover:to-yellow-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
-            onClick={askQuestion}
-          >
-            <Play className="w-6 h-6" />
-            🎤 Ask Question
-          </button>
-        )}
-        
-        {isThinking && (
-          <button
-            className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
-            onClick={skipThinking}
-          >
-            <Mic className="w-6 h-6" />
-            ⚡ Skip & Start Recording
-          </button>
-        )}
-        
-        {isRecording && (
-          <button
-            className="px-8 py-4 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-bold hover:from-red-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
-            onClick={stopRecording}
-          >
-            <Square className="w-6 h-6" />
-            🛑 Stop Recording
-          </button>
-        )}
-      </div>
+          {/* Control Buttons */}
+          <div className="flex gap-4 justify-center">
+            {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion < QUESTIONS.length && status.includes('Ask Question') && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-500 to-yellow-500 text-white font-bold hover:from-pink-600 hover:to-yellow-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={askQuestion}
+              >
+                <Play className="w-6 h-6" />
+                🎤 Ask Question
+              </button>
+            )}
+
+            {isThinking && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={skipThinking}
+              >
+                <Mic className="w-6 h-6" />
+                ⚡ Skip & Start Recording
+              </button>
+            )}
+
+            {isRecording && (
+              <button
+                className="px-10 py-5 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-bold hover:from-red-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-xl flex items-center gap-3 animate-pulse"
+                onClick={stopRecording}
+              >
+                <Square className="w-7 h-7" />
+                🛑 Stop Recording ({formatTime(recordingTime)})
+              </button>
+            )}
+
+            {/* Fallback Next Question button */}
+            {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion < QUESTIONS.length - 1 && status.includes('Processing') && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold hover:from-blue-600 hover:to-indigo-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={nextQuestion}
+              >
+                <Play className="w-6 h-6" />
+                ➡️ Next Question
+              </button>
+            )}
+
+            {/* Go to Summary button for last question */}
+            {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Processing') && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={goToSummary}
+              >
+                <Sparkles className="w-6 h-6" />
+                ✨ Go to Summary
+              </button>
+            )}
+
+            {/* Manual Go to Summary button for last question when ready */}
+            {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Ask Question') && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={goToSummary}
+              >
+                <Sparkles className="w-6 h-6" />
+                ✨ End Interview & Go to Summary
+              </button>
+            )}
+
+            {/* Go to Summary button after completing the last question */}
+            {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Interview completed') && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={goToSummary}
+              >
+                <Sparkles className="w-6 h-6" />
+                🎯 Go to Summary Now
+              </button>
+            )}
+
+            {/* Skip Transcription button when transcription is taking too long */}
+            {isTranscribing && (
+              <button
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                onClick={() => {
+                  setIsTranscribing(false);
+                  isTranscribingRef.current = false;
+                  setStatus('Transcription skipped. Click "Ask Question" for the next question.');
+                }}
+              >
+                <Clock className="w-6 h-6" />
+                ⏭️ Skip Transcription & Continue
+              </button>
+            )}
+          </div>
 
       {/* Progress Indicator */}
       <div className="w-full bg-gradient-to-r from-pink-100 to-yellow-100 rounded-full h-3 border border-pink-200">
-        <div 
-          className="bg-gradient-to-r from-pink-500 to-yellow-500 h-3 rounded-full transition-all duration-300 shadow-sm"
-          style={{ width: `${Math.min(100, ((currentQuestion + 1) / QUESTIONS.length) * 100)}%` }}
-        ></div>
+            <div 
+              className="bg-gradient-to-r from-pink-500 to-yellow-500 h-3 rounded-full transition-all duration-300 shadow-sm"
+              style={{ width: `${Math.min(100, ((currentQuestion + 1) / QUESTIONS.length) * 100)}%` }}
+            ></div>
       </div>
     </div>
   );

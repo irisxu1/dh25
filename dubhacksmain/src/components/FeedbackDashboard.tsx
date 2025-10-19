@@ -10,6 +10,7 @@ interface FeedbackDashboardProps {
       videoUrl: string;
       videoBlob: Blob;
       size: number;
+      fileName: string;
     }>;
     metrics: {
       fillerWords: number;
@@ -39,11 +40,13 @@ interface FeedbackDashboardProps {
       pass: boolean;
       rationale: string;
     };
+    company: string;
   };
+  onRedo?: () => void;
 }
 
-const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results }) => {
-  const { transcript, recordings, metrics, questionAnalysis, summary, decision } = results;
+const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }) => {
+  const { transcript, recordings, metrics, questionAnalysis, summary, decision, company } = results;
 
   // Parse transcript to extract Q&A pairs
   const parseTranscript = (transcript: string) => {
@@ -155,11 +158,25 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results }) => {
   return (
     <div className="space-y-6 min-h-screen bg-gradient-to-br from-pink-50 to-yellow-50">
       <div className="bg-white rounded-2xl shadow-lg p-6 border border-pink-200">
-        <div className="flex items-center gap-3 mb-6">
-          <Sparkles className="w-8 h-8 text-pink-500" />
-          <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
-            Interview Analysis Results
-          </h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-8 h-8 text-pink-500" />
+            <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
+              Interview Analysis Results
+            </h2>
+          </div>
+          {onRedo && (
+            <button
+              onClick={onRedo}
+              className="bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white px-6 py-3 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+            >
+              <Heart className="w-5 h-5" /> Practice Again
+            </button>
+          )}
+        </div>
+        
+        <div className="mb-6">
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">Company: {company}</h3>
         </div>
         
         {/* Overall Decision */}
@@ -224,6 +241,9 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results }) => {
                     <span className="text-sm font-medium text-yellow-800">Question {recording.questionNumber}</span>
                     <span className="text-xs text-yellow-600">{(recording.size / 1024 / 1024).toFixed(1)} MB</span>
                   </div>
+                  <div className="mb-2">
+                    <span className="text-xs text-yellow-700 font-medium">Saved as: {recording.fileName}</span>
+                  </div>
                   <video 
                     controls 
                     className="w-full rounded-lg mb-3"
@@ -233,11 +253,11 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results }) => {
                   <div className="flex gap-2">
                     <a 
                       href={recording.videoUrl} 
-                      download={`interview-q${recording.questionNumber}.webm`}
+                      download={recording.fileName}
                       className="flex items-center gap-1 px-3 py-1 bg-yellow-500 text-white rounded-lg text-sm hover:bg-yellow-600 transition-colors"
                     >
                       <Download className="w-4 h-4" />
-                      Download
+                      Download Again
                     </a>
                   </div>
                 </div>

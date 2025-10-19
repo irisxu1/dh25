@@ -4,12 +4,15 @@ import InterviewRecorder from './components/InterviewRecorder';
 import FeedbackDashboard from './components/FeedbackDashboard';
 
 type AppState = 'setup' | 'recording' | 'analyzing' | 'feedback';
-export type Company = 'Acme Corp' | 'Globex' | 'Initech' | 'Umbrella' | 'Soylent';
+export type Company = 'Amazon' | 'T-Mobile' | 'Atlassian' | 'Statsig' | 'ElevenLabs';
+
+// Available companies with specific interview questions
+const AVAILABLE_COMPANIES: Company[] = ['Amazon', 'T-Mobile', 'Atlassian', 'Statsig', 'ElevenLabs'];
 
 function App() {
   const [currentState, setCurrentState] = useState<AppState>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
-  const [selectedCompany, setSelectedCompany] = useState<Company>('Acme Corp');
+  const [selectedCompany, setSelectedCompany] = useState<Company>('Amazon');
 
   const handleStartRecording = () => {
     setCurrentState('recording');
@@ -25,6 +28,11 @@ function App() {
   };
 
   const handleNewInterview = () => {
+    setCurrentState('setup');
+    setAnalysisResults(null);
+  };
+
+  const handleCancel = () => {
     setCurrentState('setup');
     setAnalysisResults(null);
   };
@@ -54,17 +62,15 @@ function App() {
                   <label className="block text-lg font-semibold text-gray-700 mb-3">
                     🏢 Select Company:
                   </label>
-                  <select
-                    value={selectedCompany}
-                    onChange={(e) => setSelectedCompany(e.target.value as Company)}
-                    className="border-2 border-pink-200 rounded-2xl px-6 py-3 text-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-gradient-to-r from-pink-50 to-yellow-50"
-                  >
-                    <option value="Acme Corp">Acme Corp</option>
-                    <option value="Globex">Globex</option>
-                    <option value="Initech">Initech</option>
-                    <option value="Umbrella">Umbrella</option>
-                    <option value="Soylent">Soylent</option>
-                  </select>
+                      <select
+                        value={selectedCompany}
+                        onChange={(e) => setSelectedCompany(e.target.value as Company)}
+                        className="border-2 border-pink-200 rounded-2xl px-6 py-3 text-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent bg-gradient-to-r from-pink-50 to-yellow-50"
+                      >
+                        {AVAILABLE_COMPANIES.map((company) => (
+                          <option key={company} value={company}>{company}</option>
+                        ))}
+                      </select>
                 </div>
                 <button
                   onClick={handleStartRecording}
@@ -109,7 +115,8 @@ function App() {
           {currentState === 'recording' && (
             <InterviewRecorder 
               company={selectedCompany}
-              onStop={handleStopRecording} 
+              onStop={handleStopRecording}
+              onCancel={handleCancel}
             />
           )}
 
@@ -124,17 +131,7 @@ function App() {
           )}
 
           {currentState === 'feedback' && analysisResults && (
-            <div>
-              <FeedbackDashboard results={analysisResults} />
-              <div className="text-center mt-8">
-                <button
-                  onClick={handleNewInterview}
-                  className="bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white px-8 py-3 rounded-2xl font-bold text-lg transition-all transform hover:scale-105 shadow-lg"
-                >
-                  🌟 Practice Again
-                </button>
-              </div>
-            </div>
+            <FeedbackDashboard results={analysisResults} onRedo={handleNewInterview} />
           )}
         </main>
       </div>
