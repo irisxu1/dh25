@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Mic, Video, BarChart3, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from './services/supabaseClient';
+import LoginModal from './components/LoginModal';
+import { Mic, Video, BarChart3 } from 'lucide-react';
 import InterviewRecorder from './components/InterviewRecorder';
 import FeedbackDashboard from './components/FeedbackDashboard';
 
@@ -13,6 +15,47 @@ function App() {
   const [currentState, setCurrentState] = useState<AppState>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>('Amazon');
+
+  useEffect(() => {
+    // Subscribe to auth changes and ensure a profile row exists
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event: any, session: any) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        const user = session.user;
+
+        try {
+          // 1) See if a profile exists for this auth user
+          const { data: existing, error: fetchErr } = await supabase
+            .from('profiles')
+            .select('auth_id')
+            .eq('auth_id', user.id)   // <-- IMPORTANT: match on auth_id (uuid)
+            .maybeSingle();
+
+          if (fetchErr) {
+            // ignore "No rows found" type errors; log others
+            console.warn('profiles check warning:', fetchErr);
+          }
+
+          // 2) If missing, create it (or just upsert to be safe)
+          if (!existing) {
+            const { error: upsertErr } = await supabase.from('profiles').upsert({
+              auth_id: user.id,                                 // <-- uuid from Auth
+              email: user.email,
+              username: user.user_metadata?.username ?? null,   // may be null; you can update later
+              // created_at is set by DB default now()
+            });
+            if (upsertErr) console.error('profiles upsert error:', upsertErr);
+          }
+        } catch (e) {
+          console.error('profile sync error:', e);
+        }
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => {
+      sub?.subscription?.unsubscribe();
+    };
+  }, []);
 
   const handleStartRecording = () => {
     setCurrentState('recording');

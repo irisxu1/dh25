@@ -1,12 +1,21 @@
 import express from 'express';
-import axios from 'axios';
-import FormData from 'form-data';
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { Request } from 'express';
+
+// Extend Request type to include file property from multer
+interface MulterRequest extends Request {
+  file?: any; // Using any to avoid multer type issues
+}
 
 const router = express.Router();
 
 // ElevenLabs API configuration
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || 'sk_80e980bf40026ecd7d283ab8683c973a52751516e9d0578f';
-const ELEVENLABS_BASE_URL = 'https://api.elevenlabs.io/v1';
+
+// Initialize ElevenLabs client
+const elevenlabs = new ElevenLabsClient({
+  apiKey: ELEVENLABS_API_KEY
+});
 
 // Text-to-Speech endpoint
 router.post('/text-to-speech', async (req, res) => {
@@ -17,31 +26,35 @@ router.post('/text-to-speech', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    const response = await axios.post(
-      `${ELEVENLABS_BASE_URL}/text-to-speech/${voiceId}`,
-      {
-        text,
-        model_id: 'eleven_turbo_v2_5',
-        voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.5,
-          style: 0.0,
-          use_speaker_boost: true
-        }
-      },
-      {
-        headers: {
-          'Accept': 'audio/mpeg',
-          'Content-Type': 'application/json',
-          'xi-api-key': ELEVENLABS_API_KEY
-        },
-        responseType: 'arraybuffer'
+    const audio = await elevenlabs.textToSpeech.convert(voiceId, {
+      text: text,
+      modelId: "eleven_turbo_v2_5",
+      voiceSettings: {
+        stability: 0.5,
+        similarityBoost: 0.5,
+        style: 0.0,
+        useSpeakerBoost: true
       }
-    );
+    });
 
-    // Convert audio buffer to base64
-    const audioBuffer = Buffer.from(response.data);
-    const base64Audio = audioBuffer.toString('base64');
+    // Convert audio stream to base64
+    const chunks: Uint8Array[] = [];
+    const reader = audio.getReader();
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    
+    const audioBuffer = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
+    let offset = 0;
+    for (const chunk of chunks) {
+      audioBuffer.set(chunk, offset);
+      offset += chunk.length;
+    }
+    
+    const base64Audio = Buffer.from(audioBuffer).toString('base64');
 
     res.json({
       audio: base64Audio,
@@ -57,33 +70,39 @@ router.post('/text-to-speech', async (req, res) => {
 });
 
 // Speech-to-Text endpoint
-router.post('/speech-to-text', async (req, res) => {
+router.post('/speech-to-text', async (req: MulterRequest, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Audio file is required' });
     }
 
-    const formData = new FormData();
-    formData.append('audio', req.file.buffer, {
-      filename: 'audio.webm',
-      contentType: 'audio/webm'
-    });
-    formData.append('model_id', 'whisper-1');
+    // Create a Blob from the uploaded file buffer
+    const audioBlob = new Blob([req.file.buffer], { type: 'audio/webm' });
 
-    const response = await axios.post(
-      `${ELEVENLABS_BASE_URL}/speech-to-text`,
-      formData,
-      {
-        headers: {
-          ...formData.getHeaders(),
-          'xi-api-key': ELEVENLABS_API_KEY
-        }
-      }
-    );
+    const transcription = await elevenlabs.speechToText.convert({
+      file: audioBlob,
+      modelId: "scribe_v1", // Model to use, for now only "scribe_v1" is supported
+      tagAudioEvents: true, // Tag audio events like laughter, applause, etc
+      languageCode: "eng", // Language of the audio file
+      diarize: true // Whether to annotate who is speaking
+    });
+
+    // Handle the response structure properly
+    let text = '';
+    let transcriptionId = '';
+    
+    if (typeof transcription === 'string') {
+      text = transcription;
+    } else if (transcription && typeof transcription === 'object') {
+      // Type assertion to handle the response structure
+      const response = transcription as any;
+      text = response.text || response.transcript || '';
+      transcriptionId = response.transcriptionId || response.id || '';
+    }
 
     res.json({
-      transcriptionId: response.data.transcription_id,
-      text: response.data.text || ''
+      transcriptionId: transcriptionId,
+      text: text
     });
   } catch (error) {
     console.error('ElevenLabs STT error:', error);
@@ -99,16 +118,9 @@ router.get('/transcript/:transcriptionId', async (req, res) => {
   try {
     const { transcriptionId } = req.params;
 
-    const response = await axios.get(
-      `${ELEVENLABS_BASE_URL}/speech-to-text/transcripts/${transcriptionId}`,
-      {
-        headers: {
-          'xi-api-key': ELEVENLABS_API_KEY
-        }
-      }
-    );
+    const transcript = await elevenlabs.speechToText.transcripts.get(transcriptionId);
 
-    res.json(response.data);
+    res.json(transcript);
   } catch (error) {
     console.error('ElevenLabs transcript error:', error);
     res.status(500).json({ 
@@ -121,13 +133,9 @@ router.get('/transcript/:transcriptionId', async (req, res) => {
 // Get available voices
 router.get('/voices', async (req, res) => {
   try {
-    const response = await axios.get(`${ELEVENLABS_BASE_URL}/voices`, {
-      headers: {
-        'xi-api-key': ELEVENLABS_API_KEY
-      }
-    });
+    const voices = await elevenlabs.voices.getAll();
 
-    res.json(response.data);
+    res.json(voices);
   } catch (error) {
     console.error('ElevenLabs voices error:', error);
     res.status(500).json({ 
