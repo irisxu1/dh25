@@ -7,22 +7,19 @@
       "config": {
         "distDir": "build"
       }
-    },
-    {
-      "src": "server/index.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/server/index.js"
-    },
     {
       "src": "/(.*)",
       "dest": "/build/$1"
     }
   ],
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
   "env": {
     "NODE_ENV": "production"
   }
