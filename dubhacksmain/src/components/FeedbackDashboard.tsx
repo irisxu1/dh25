@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Download, Star, CheckCircle, XCircle, Sparkles, Heart, Sun, Moon, Mic } from 'lucide-react';
+import { CheckCircle, XCircle, Play, Download, Star, Sparkles, Heart, Sun, Moon, Mic } from 'lucide-react';
 
 interface FeedbackDashboardProps {
   results: {
@@ -21,7 +21,7 @@ interface FeedbackDashboardProps {
       question: string;
       answer: string;
       starMethod: boolean;
-      relevance: number;
+      relevance: number | { score: number; feedback: string };
       feedback: string;
       starBreakdown?: {
         situation: { score: number; feedback: string };
@@ -47,6 +47,7 @@ interface FeedbackDashboardProps {
 
 const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }) => {
   const { transcript, recordings, metrics, questionAnalysis, summary, decision, company } = results;
+
 
   // Parse transcript to extract Q&A pairs
   const parseTranscript = (transcript: string) => {
@@ -109,29 +110,29 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
       situation: {
         present: situationKeywords.some(keyword => answerLower.includes(keyword)),
         feedback: situationKeywords.some(keyword => answerLower.includes(keyword)) 
-          ? "✨ Great job setting the context!" 
-          : "💡 Try starting with the situation or background",
+          ? "Great job setting the context!" 
+          : "Try starting with the situation or background",
         score: situationKeywords.some(keyword => answerLower.includes(keyword)) ? 80 : 40
       },
       task: {
         present: taskKeywords.some(keyword => answerLower.includes(keyword)),
         feedback: taskKeywords.some(keyword => answerLower.includes(keyword))
-          ? "🎯 Clear task definition!" 
-          : "🎯 Explain what needed to be accomplished",
+          ? "Clear task definition!" 
+          : "Explain what needed to be accomplished",
         score: taskKeywords.some(keyword => answerLower.includes(keyword)) ? 80 : 40
       },
       action: {
         present: actionKeywords.some(keyword => answerLower.includes(keyword)),
         feedback: actionKeywords.some(keyword => answerLower.includes(keyword))
-          ? "🚀 Excellent action steps!" 
-          : "🚀 Describe the specific actions you took",
+          ? "Excellent action steps!" 
+          : "Describe the specific actions you took",
         score: actionKeywords.some(keyword => answerLower.includes(keyword)) ? 80 : 40
       },
       result: {
         present: resultKeywords.some(keyword => answerLower.includes(keyword)),
         feedback: resultKeywords.some(keyword => answerLower.includes(keyword))
-          ? "🌟 Perfect results description!" 
-          : "🌟 Share the outcome or impact of your actions",
+          ? "Perfect results description!" 
+          : "Share the outcome or impact of your actions",
         score: resultKeywords.some(keyword => answerLower.includes(keyword)) ? 80 : 40
       }
     };
@@ -144,14 +145,19 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
       return analysis.relevanceFeedback;
     }
     
-    // Fallback
-    const relevance = analysis?.relevance || 70;
+    // Handle relevance as object with score and feedback
+    if (analysis?.relevance && typeof analysis.relevance === 'object') {
+      return (analysis.relevance as { score: number; feedback: string }).feedback || "No specific relevance feedback available.";
+    }
+    
+    // Fallback for numeric relevance
+    const relevance = typeof analysis?.relevance === 'number' ? analysis.relevance : 70;
     if (relevance >= 80) {
-      return "🎉 Your answer directly addresses the question with excellent relevance!";
+      return "Your answer directly addresses the question with excellent relevance!";
     } else if (relevance >= 60) {
-      return "👍 Good relevance, but try to connect your answer more directly to the question.";
+      return "Good relevance, but try to connect your answer more directly to the question.";
     } else {
-      return "💭 Consider how your answer more directly relates to what was asked.";
+      return "Consider how your answer more directly relates to what was asked.";
     }
   };
 
@@ -161,8 +167,8 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Sparkles className="w-8 h-8 text-pink-500" />
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-yellow-600 bg-clip-text text-transparent">
-              Interview Analysis Results
+            <h2 className="text-3xl font-bold text-gray-800">
+              Rehearsal Room Analysis Results
             </h2>
           </div>
           {onRedo && (
@@ -189,7 +195,7 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
             )}
             <div>
               <h3 className={`text-2xl font-bold ${decision.pass ? 'text-green-800' : 'text-orange-800'}`}>
-                {decision.pass ? '🎉 Congratulations! You Passed!' : '💪 Keep Practicing!'}
+                {decision.pass ? 'Congratulations! You Passed!' : 'Keep Practicing!'}
               </h3>
               <p className={`text-lg mt-1 ${decision.pass ? 'text-green-700' : 'text-orange-700'}`}>
                 {decision.rationale}
@@ -277,21 +283,26 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
               const starBreakdown = getSTARBreakdown(qa, index);
               const relevanceFeedback = getRelevanceFeedback(qa, index);
               
+              
               return (
                 <div key={index} className="bg-gradient-to-br from-pink-50 to-yellow-50 rounded-2xl p-6 border border-pink-200">
                   <div className="flex items-start justify-between mb-4">
                     <h4 className="font-bold text-lg text-pink-700">Question {qa.questionNumber}</h4>
                     <div className="flex gap-2">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      <div className={`px-3 py-1 rounded-full text-sm font-medium ${
                         questionAnalysis?.[index]?.starMethod ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
                       }`}>
                         {questionAnalysis?.[index]?.starMethod ? 'STAR ✓' : 'STAR ✗'}
-                      </span>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                        (questionAnalysis?.[index]?.relevance || 0) >= 70 ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        Relevance: {questionAnalysis?.[index]?.relevance || 0}%
-                      </span>
+                      </div>
+                      <div className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                        Relevance: {(() => {
+                          const relevance = questionAnalysis?.[index]?.relevance;
+                          const relevanceScore = typeof relevance === 'object' 
+                            ? (relevance as { score: number; feedback: string }).score 
+                            : typeof relevance === 'number' ? relevance : 85;
+                          return Math.round(relevanceScore);
+                        })()}%
+                      </div>
                     </div>
                   </div>
                   
@@ -329,7 +340,7 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
                                 data.score >= 60 ? 'bg-yellow-100 text-yellow-800' :
                                 'bg-red-100 text-red-800'
                               }`}>
-                                {data.score}%
+                                {Math.round(data.score)}%
                               </span>
                             </div>
                             <p className="text-sm text-gray-600">{data.feedback}</p>

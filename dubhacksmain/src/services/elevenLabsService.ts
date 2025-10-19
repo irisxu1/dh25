@@ -1,46 +1,20 @@
 import axios from 'axios';
 
-// interface ElevenLabsResponse {
-//   audio: string; // Base64 encoded audio
-//   isFinal: boolean;
-// }
-
 class ElevenLabsService {
-  private apiKey: string;
-  private baseUrl = 'https://api.elevenlabs.io/v1';
+  private baseUrl = 'http://localhost:3001/api/elevenlabs';
 
   constructor() {
-    // Your ElevenLabs API key
-    this.apiKey = 'sk_80e980bf40026ecd7d283ab8683c973a52751516e9d0578f';
+    // Use backend API instead of direct client
   }
 
   async textToSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<string> {
     try {
-      const response = await axios.post(
-        `${this.baseUrl}/text-to-speech/${voiceId}`,
-        {
-          text,
-          model_id: 'eleven_turbo_v2_5', // Using the latest Turbo model for better performance
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.5,
-            style: 0.0,
-            use_speaker_boost: true
-          }
-        },
-        {
-          headers: {
-            'Accept': 'audio/mpeg',
-            'Content-Type': 'application/json',
-            'xi-api-key': this.apiKey
-          },
-          responseType: 'arraybuffer'
-        }
-      );
+      const response = await axios.post(`${this.baseUrl}/text-to-speech`, {
+        text: text,
+        voiceId: voiceId
+      });
 
-      // Convert audio buffer to base64
-      const audioBuffer = Buffer.from(response.data);
-      return audioBuffer.toString('base64');
+      return response.data.audio;
     } catch (error) {
       console.error('Error with ElevenLabs text-to-speech:', error);
       throw error;
@@ -49,12 +23,8 @@ class ElevenLabsService {
 
   async getVoices(): Promise<any[]> {
     try {
-      const response = await axios.get(`${this.baseUrl}/voices`, {
-        headers: {
-          'xi-api-key': this.apiKey
-        }
-      });
-      return response.data.voices;
+      const response = await axios.get(`${this.baseUrl}/voices`);
+      return response.data.voices || [];
     } catch (error) {
       console.error('Error fetching voices:', error);
       return [];
@@ -84,32 +54,6 @@ class ElevenLabsService {
     }
   }
 
-  async speechToSpeech(audioFile: File, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<string> {
-    try {
-      const formData = new FormData();
-      formData.append('audio', audioFile);
-      formData.append('voice_id', voiceId);
-      formData.append('model_id', 'eleven_multilingual_v2'); // Using the latest multilingual model
-
-      const response = await axios.post(
-        `${this.baseUrl}/speech-to-speech/${voiceId}`,
-        formData,
-        {
-          headers: {
-            'Accept': 'audio/mpeg',
-            'xi-api-key': this.apiKey
-          },
-          responseType: 'arraybuffer'
-        }
-      );
-
-      const audioBuffer = Buffer.from(response.data);
-      return audioBuffer.toString('base64');
-    } catch (error) {
-      console.error('Error with ElevenLabs speech-to-speech:', error);
-      throw error;
-    }
-  }
 
   // Helper method to play audio from base64
   playAudio(base64Audio: string) {
@@ -133,23 +77,38 @@ class ElevenLabsService {
   // Speech-to-text transcription using ElevenLabs
   async speechToText(audioBlob: Blob): Promise<string> {
     try {
+      console.log('Starting ElevenLabs speech-to-text with audio blob:', {
+        size: audioBlob.size,
+        type: audioBlob.type
+      });
+
       const formData = new FormData();
       formData.append('audio', audioBlob);
-      formData.append('model_id', 'whisper-1'); // Using Whisper model for transcription
 
-      const response = await axios.post(
-        `${this.baseUrl}/speech-to-text`,
-        formData,
-        {
-          headers: {
-            'xi-api-key': this.apiKey
-          }
-        }
-      );
+      console.log('Sending request to:', `${this.baseUrl}/speech-to-text`);
+      
+      const response = await axios.post(`${this.baseUrl}/speech-to-text`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+        timeout: 90000, // 90 second timeout (tripled from 30 seconds)
+      });
+
+      console.log('ElevenLabs response:', {
+        status: response.status,
+        data: response.data
+      });
 
       return response.data.text || '';
     } catch (error) {
       console.error('Error with ElevenLabs speech-to-text:', error);
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        console.error('Response error:', {
+          status: axiosError.response?.status,
+          data: axiosError.response?.data
+        });
+      }
       throw error;
     }
   }

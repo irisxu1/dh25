@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Square, Mic, Video, Clock, Sparkles } from 'lucide-react';
+import { Play, Square, Mic, Clock, Sparkles } from 'lucide-react';
 import { elevenLabsService } from '../services/elevenLabsService';
-import { analyzeTranscriptWithGemini } from '../services/voiceAnalysisService';
+import { geminiService } from '../services/geminiService';
 import type { Company } from '../App';
 
 interface InterviewRecorderProps {
@@ -59,9 +59,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   const [thinkingTime, setThinkingTime] = useState(5);
   const [recordingTime, setRecordingTime] = useState(0);
   const [status, setStatus] = useState('Click "Ask Question" to begin.');
-  const [transcript, setTranscript] = useState<string>('');
   const [recordings, setRecordings] = useState<any[]>([]);
-  const [isTranscribing, setIsTranscribing] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -70,7 +68,6 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestionRef = useRef<number>(0);
-  const isTranscribingRef = useRef<boolean>(false);
 
   // Update the ref whenever currentQuestion changes
   useEffect(() => {
@@ -181,70 +178,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
             }, 1000);
           }
           
-          // Transcribe the audio in the background (don't block progression)
-          setIsTranscribing(true);
-          isTranscribingRef.current = true;
-          const transcriptionPromise = extractAudioFromVideo(videoBlob).then(audioBlob => {
-            setStatus('Transcribing your answer...');
-            return elevenLabsService.speechToText(audioBlob);
-          }).then(transcription => {
-            const answerText = transcription || '';
-            // Store the answer for this question
-            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: ${answerText}\n`);
-            setIsTranscribing(false);
-            isTranscribingRef.current = false;
-            
-            // If this was the last question, update status to show completion
-            if (isLastQuestion) {
-              console.log('Last question transcription completed');
-              setStatus('Interview completed! Click "Go to Summary" when ready.');
-            }
-          }).catch(error => {
-            console.error('Transcription failed:', error);
-            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription failed]\n`);
-            setIsTranscribing(false);
-            isTranscribingRef.current = false;
-            
-            // If this was the last question, update status to show completion
-            if (isLastQuestion) {
-              console.log('Last question transcription failed, but interview is complete');
-              setStatus('Interview completed! Click "Go to Summary" when ready.');
-            }
-          });
-          
-          // Auto-progress after 5 seconds if transcription is still running
-          setTimeout(() => {
-            if (isTranscribingRef.current) {
-              console.log('Auto-progressing after 5 seconds - transcription still running');
-              setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription in progress - auto-skipped]\n`);
-              setIsTranscribing(false);
-              isTranscribingRef.current = false;
-              
-              // If this was the last question, update status to show completion
-              if (isLastQuestion) {
-                console.log('Last question auto-skipped, interview complete');
-                setStatus('Interview completed! Click "Go to Summary" when ready.');
-              }
-            }
-          }, 5000); // 5 second auto-progress
-          
-          // Add a longer timeout to prevent transcription from hanging completely
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Transcription timeout')), 30000); // 30 second timeout
-          });
-          
-          Promise.race([transcriptionPromise, timeoutPromise]).catch(error => {
-            console.error('Transcription timeout or failed:', error);
-            setTranscript(prev => prev + `\nQ${currentQ + 1}: ${QUESTIONS[currentQ]}\nA${currentQ + 1}: [Transcription timeout]\n`);
-            setIsTranscribing(false);
-            isTranscribingRef.current = false;
-            
-            // If this was the last question, update status to show completion
-            if (isLastQuestion) {
-              console.log('Last question transcription timed out, interview complete');
-              setStatus('Interview completed! Click "Go to Summary" when ready.');
-            }
-          });
+          // No transcription during recording - will be done at summary time
         };
         
         mediaRecorderRef.current = mr;
@@ -275,17 +209,40 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
 
   // Helper function to extract audio from video for transcription
   const extractAudioFromVideo = async (videoBlob: Blob): Promise<Blob> => {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      console.log('Extracting audio from video blob:', videoBlob.size, 'bytes, type:', videoBlob.type);
+      
       const video = document.createElement('video');
       const canvas = document.createElement('canvas');
       const audioContext = new AudioContext();
       
       video.src = URL.createObjectURL(videoBlob);
+      
       video.onloadedmetadata = () => {
+        console.log('Video metadata loaded:', {
+          duration: video.duration,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight
+        });
+        
         // For now, return the video blob as audio
         // In a real implementation, you'd extract just the audio track
+        // This is a simplified approach - the backend will handle the audio extraction
         resolve(videoBlob);
       };
+      
+      video.onerror = (error) => {
+        console.error('Error loading video for audio extraction:', error);
+        reject(new Error('Failed to load video for audio extraction'));
+      };
+      
+      // Set a timeout to prevent hanging
+      setTimeout(() => {
+        if (!video.duration) {
+          console.warn('Video metadata loading timed out, using video blob directly');
+          resolve(videoBlob);
+        }
+      }, 5000);
     });
   };
 
@@ -441,16 +398,131 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   };
 
   const analyzeInterview = async () => {
-    console.log('Analyzing interview - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'transcript length:', transcript.length);
+    console.log('Analyzing interview - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'recordings count:', recordings.length);
+    
+    setStatus('Transcribing all your answers...');
+    
     try {
-      const analysis = await analyzeTranscriptWithGemini(transcript, {
+      // Transcribe all recordings using ElevenLabs
+      let fullTranscript = '';
+      
+      for (let i = 0; i < recordings.length; i++) {
+        const recording = recordings[i];
+        setStatus(`Transcribing answer ${i + 1} of ${recordings.length}...`);
+        
+        try {
+          // Extract audio from video and transcribe
+          const audioBlob = await extractAudioFromVideo(recording.videoBlob);
+          console.log(`Extracted audio for Q${recording.questionNumber}:`, audioBlob.size, 'bytes');
+          
+          const transcription = await elevenLabsService.speechToText(audioBlob);
+          const answerText = transcription || '[No speech detected]';
+          
+          console.log(`Transcription for Q${recording.questionNumber}:`, answerText);
+          
+          // Save transcription to file for debugging
+          const transcriptionData = {
+            questionNumber: recording.questionNumber,
+            question: recording.question,
+            transcription: answerText,
+            audioSize: audioBlob.size,
+            timestamp: new Date().toISOString(),
+            fileName: recording.fileName
+          };
+          
+          // Save as JSON file
+          const transcriptionBlob = new Blob([JSON.stringify(transcriptionData, null, 2)], { type: 'application/json' });
+          const transcriptionUrl = URL.createObjectURL(transcriptionBlob);
+          const transcriptionFileName = `transcription_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.json`;
+          
+          const transcriptionLink = document.createElement('a');
+          transcriptionLink.href = transcriptionUrl;
+          transcriptionLink.download = transcriptionFileName;
+          document.body.appendChild(transcriptionLink);
+          transcriptionLink.click();
+          document.body.removeChild(transcriptionLink);
+          
+          // Also save as text file
+          const textBlob = new Blob([`Question ${recording.questionNumber}: ${recording.question}\n\nAnswer: ${answerText}\n\nAudio Size: ${audioBlob.size} bytes\nTimestamp: ${new Date().toISOString()}`], { type: 'text/plain' });
+          const textUrl = URL.createObjectURL(textBlob);
+          const textFileName = `transcription_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.txt`;
+          
+          const textLink = document.createElement('a');
+          textLink.href = textUrl;
+          textLink.download = textFileName;
+          document.body.appendChild(textLink);
+          textLink.click();
+          document.body.removeChild(textLink);
+          
+          console.log(`Saved transcription files for Q${recording.questionNumber}: ${transcriptionFileName} and ${textFileName}`);
+          
+          // Add to transcript
+          fullTranscript += `\nQ${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: ${answerText}\n`;
+        } catch (error) {
+          console.error(`Transcription failed for question ${recording.questionNumber}:`, error);
+          
+          // Save error information to file
+          const errorData = {
+            questionNumber: recording.questionNumber,
+            question: recording.question,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            timestamp: new Date().toISOString(),
+            fileName: recording.fileName
+          };
+          
+          const errorBlob = new Blob([JSON.stringify(errorData, null, 2)], { type: 'application/json' });
+          const errorUrl = URL.createObjectURL(errorBlob);
+          const errorFileName = `transcription_error_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.json`;
+          
+          const errorLink = document.createElement('a');
+          errorLink.href = errorUrl;
+          errorLink.download = errorFileName;
+          document.body.appendChild(errorLink);
+          errorLink.click();
+          document.body.removeChild(errorLink);
+          
+          console.log(`Saved error file for Q${recording.questionNumber}: ${errorFileName}`);
+          
+          fullTranscript += `\nQ${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: [Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}]\n`;
+        }
+      }
+      
+      setStatus('Analyzing your interview responses...');
+      
+      // Save complete transcript summary for debugging
+      const summaryData = {
         company: company,
-        questionCount: QUESTIONS.length
-      });
+        totalQuestions: QUESTIONS.length,
+        totalRecordings: recordings.length,
+        fullTranscript: fullTranscript,
+        recordings: recordings.map(r => ({
+          questionNumber: r.questionNumber,
+          question: r.question,
+          fileName: r.fileName,
+          size: r.size
+        })),
+        timestamp: new Date().toISOString()
+      };
+      
+      const summaryBlob = new Blob([JSON.stringify(summaryData, null, 2)], { type: 'application/json' });
+      const summaryUrl = URL.createObjectURL(summaryBlob);
+      const summaryFileName = `interview_summary_${company.toLowerCase().replace(/\s+/g, '')}_${new Date().toISOString().split('T')[0]}.json`;
+      
+      const summaryLink = document.createElement('a');
+      summaryLink.href = summaryUrl;
+      summaryLink.download = summaryFileName;
+      document.body.appendChild(summaryLink);
+      summaryLink.click();
+      document.body.removeChild(summaryLink);
+      
+      console.log(`Saved interview summary: ${summaryFileName}`);
+      
+      // Now analyze the complete transcript using Gemini
+      const analysis = await geminiService.analyzeInterview(fullTranscript, company, QUESTIONS.length);
 
       onStop({
         company,
-        transcript,
+        transcript: fullTranscript,
         recordings,
         ...analysis,
         createdAt: new Date().toISOString()
@@ -459,7 +531,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
       console.error('Analysis failed:', error);
       onStop({
         company,
-        transcript,
+        transcript: 'Analysis failed - could not transcribe recordings',
         recordings,
         summary: 'Analysis failed',
         metrics: { fillerWords: 0, speakingRateWpm: 0 },
@@ -626,20 +698,6 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
               </button>
             )}
 
-            {/* Skip Transcription button when transcription is taking too long */}
-            {isTranscribing && (
-              <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-orange-500 to-red-500 text-white font-bold hover:from-orange-600 hover:to-red-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
-                onClick={() => {
-                  setIsTranscribing(false);
-                  isTranscribingRef.current = false;
-                  setStatus('Transcription skipped. Click "Ask Question" for the next question.');
-                }}
-              >
-                <Clock className="w-6 h-6" />
-                ⏭️ Skip Transcription & Continue
-              </button>
-            )}
           </div>
 
       {/* Progress Indicator */}
