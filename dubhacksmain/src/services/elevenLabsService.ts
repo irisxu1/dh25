@@ -8,14 +8,25 @@ class ElevenLabsService {
 
   async textToSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<string> {
     try {
+      console.log('Calling ElevenLabs TTS:', { text: text.substring(0, 50) + '...', voiceId, baseUrl: this.baseUrl });
+      
       const response = await axios.post(`${this.baseUrl}/elevenlabs-text-to-speech`, {
         text: text,
         voiceId: voiceId
       });
 
+      console.log('ElevenLabs TTS response:', { status: response.status, hasAudio: !!response.data.audio });
       return response.data.audio;
     } catch (error) {
       console.error('Error with ElevenLabs text-to-speech:', error);
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as any;
+        console.error('ElevenLabs TTS error details:', {
+          status: axiosError.response?.status,
+          data: axiosError.response?.data,
+          message: axiosError.message
+        });
+      }
       throw error;
     }
   }

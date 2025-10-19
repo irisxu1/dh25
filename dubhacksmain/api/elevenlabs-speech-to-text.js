@@ -6,6 +6,13 @@ const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
 if (!ELEVENLABS_API_KEY) {
   console.error('ELEVENLABS_API_KEY environment variable is required');
+  module.exports = async (req, res) => {
+    res.status(500).json({ 
+      error: 'ElevenLabs API key not configured',
+      details: 'ELEVENLABS_API_KEY environment variable is missing'
+    });
+  };
+  return;
 }
 
 const elevenlabs = new ElevenLabsClient({

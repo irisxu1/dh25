@@ -7,8 +7,8 @@ const router = express.Router();
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 
 if (!ELEVENLABS_API_KEY) {
-  console.error('ELEVENLABS_API_KEY environment variable is required');
-  process.exit(1);
+  console.warn('ELEVENLABS_API_KEY environment variable is not set. ElevenLabs features will not work.');
+  console.warn('Please set ELEVENLABS_API_KEY in your .env file for full functionality.');
 }
 
 // Initialize ElevenLabs client
@@ -19,6 +19,13 @@ const elevenlabs = new ElevenLabsClient({
 // Text-to-Speech endpoint
 router.post('/text-to-speech', async (req, res) => {
   try {
+    if (!ELEVENLABS_API_KEY) {
+      return res.status(500).json({ 
+        error: 'ElevenLabs API key not configured',
+        details: 'Please set ELEVENLABS_API_KEY in your .env file'
+      });
+    }
+
     const { text, voiceId = 'pNInz6obpgDQGcFmaJgB' } = req.body;
 
     if (!text) {
@@ -71,6 +78,13 @@ router.post('/text-to-speech', async (req, res) => {
 // Speech-to-Text endpoint
 router.post('/speech-to-text', async (req, res) => {
   try {
+    if (!ELEVENLABS_API_KEY) {
+      return res.status(500).json({ 
+        error: 'ElevenLabs API key not configured',
+        details: 'Please set ELEVENLABS_API_KEY in your .env file'
+      });
+    }
+
     if (!req.file) {
       return res.status(400).json({ error: 'Audio file is required' });
     }
