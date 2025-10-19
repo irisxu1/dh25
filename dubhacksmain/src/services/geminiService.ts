@@ -11,8 +11,8 @@ class GeminiService {
     try {
       console.log('Starting Gemini interview analysis...');
       
-      const response = await axios.post(`${this.baseUrl}/gemini-analyze-interview`, {
-        fullTranscript: transcript,
+      const response = await axios.post(`${this.baseUrl}/analyze-interview`, {
+        transcript: transcript,
         company: company,
         questionCount: questionCount
       });

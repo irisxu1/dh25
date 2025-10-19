@@ -57,12 +57,16 @@ class ElevenLabsService {
   // Generate interview question audio with professional voice
   async generateQuestionAudio(question: string): Promise<HTMLAudioElement> {
     try {
+      console.log('🎤 generateQuestionAudio called with question:', question.substring(0, 50) + '...');
       const voiceId = await this.getInterviewVoice();
+      console.log('🎤 Got voice ID:', voiceId);
       const base64Audio = await this.textToSpeech(question, voiceId);
+      console.log('🎤 Got base64Audio, length:', base64Audio.length);
       const audio = new Audio(`data:audio/mpeg;base64,${base64Audio}`);
+      console.log('🎤 Audio element created successfully');
       return audio;
     } catch (error) {
-      console.error('Error generating question audio:', error);
+      console.error('❌ Error generating question audio:', error);
       throw error;
     }
   }
