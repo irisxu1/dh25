@@ -13,7 +13,8 @@ export type Company = 'Amazon' | 'T-Mobile' | 'Atlassian' | 'Statsig' | 'ElevenL
 const AVAILABLE_COMPANIES: Company[] = ['Amazon', 'T-Mobile', 'Atlassian', 'Statsig', 'ElevenLabs'];
 
 function App() {
-  const [session, setSession] = useState<any>(true);
+  const [session, setSession] = useState<any>(null);
+  const [skipped, setSkipped] = useState(false);
   const [currentState, setCurrentState] = useState<AppState>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>('Amazon');
@@ -86,6 +87,34 @@ function App() {
     setAnalysisResults(null);
   };
 
+
+  if (!session && !skipped) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-yellow-50 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold text-gray-800 mb-2">Rehearsal Room</h1>
+            <p className="text-lg text-gray-600">Master your interviews with AI-powered voice and video analysis</p>
+          </div>
+          <button
+            onClick={() => setSkipped(true)}
+            className="w-full bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white py-5 rounded-2xl font-bold text-2xl shadow-xl mb-6 transition-all transform hover:scale-105"
+          >
+            ✨ Skip Sign In — Try Demo
+          </button>
+          <div className="bg-white rounded-2xl shadow-lg p-8 border border-pink-200">
+            <Auth
+              supabaseClient={supabase}
+              appearance={{
+                theme: ThemeSupa,
+                variables: { default: { colors: { brand: '#EC4899', brandAccent: '#F59E0B' } } }
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-pink-50 to-yellow-50">
