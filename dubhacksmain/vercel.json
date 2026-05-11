@@ -5,24 +5,13 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build",
-        "installCommand": "npm ci",
-        "buildCommand": "npx react-scripts build"
+        "distDir": "build"
       }
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/build/$1"
-    }
-  ],
-  "functions": {
-    "api/**/*.js": {
-      "runtime": "nodejs18.x"
-    }
-  },
-  "env": {
-    "NODE_ENV": "production"
-  }
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "handle": "filesystem" },
+    { "src": "/.*", "dest": "/index.html" }
+  ]
 }

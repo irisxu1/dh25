@@ -33,8 +33,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters: fullTranscript, company, questionCount' });
     }
 
-    const model = ai.getGenerativeModel({ model: "gemini-2.5-flash" });
-
     const prompt = `You are an expert interview coach. Analyze the following interview transcript for a ${company} interview, which had ${questionCount} questions.
 
     Transcript:
@@ -68,11 +66,13 @@ module.exports = async (req, res) => {
       overallFeedback: string
     }
     Also provide overall metrics: total filler words, average speaking rate, and an overall summary and decision (pass/fail with rationale).
-    Ensure all scores are whole numbers.`;
+    Ensure all scores are whole numbers. Return only valid JSON with no markdown formatting.`;
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    const result = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt
+    });
+    const text = result.text;
 
     // Attempt to parse the text as JSON
     let analysisResult;
