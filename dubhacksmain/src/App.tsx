@@ -13,7 +13,7 @@ export type Company = 'Amazon' | 'T-Mobile' | 'Atlassian' | 'Statsig' | 'ElevenL
 const AVAILABLE_COMPANIES: Company[] = ['Amazon', 'T-Mobile', 'Atlassian', 'Statsig', 'ElevenLabs'];
 
 function App() {
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<any>(true);
   const [currentState, setCurrentState] = useState<AppState>('setup');
   const [analysisResults, setAnalysisResults] = useState<any>(null);
   const [selectedCompany, setSelectedCompany] = useState<Company>('Amazon');
