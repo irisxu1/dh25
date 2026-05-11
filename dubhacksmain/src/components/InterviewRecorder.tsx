@@ -626,7 +626,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
           <div className="flex gap-4 justify-center">
             {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion < QUESTIONS.length && status.includes('Ask Question') && (
               <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-pink-500 to-yellow-500 text-white font-bold hover:from-pink-600 hover:to-yellow-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-pink-500 text-white font-bold hover:bg-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={askQuestion}
               >
                 <Play className="w-6 h-6" />
@@ -636,7 +636,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
 
             {isThinking && (
                 <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-green-500 text-white font-bold hover:bg-green-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={skipThinking}
                 >
                 <Mic className="w-6 h-6" />
@@ -646,7 +646,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
 
             {isRecording && (
                 <button
-                className="px-10 py-5 rounded-2xl bg-gradient-to-r from-red-500 to-pink-500 text-white font-bold hover:from-red-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-xl flex items-center gap-3 animate-pulse"
+                className="px-10 py-5 rounded-2xl bg-red-500 text-white font-bold hover:bg-red-600 transition-all transform hover:scale-105 shadow-xl flex items-center gap-3 animate-pulse"
                   onClick={stopRecording}
               >
                 <Square className="w-7 h-7" />
@@ -657,7 +657,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
             {/* Fallback Next Question button */}
             {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion < QUESTIONS.length - 1 && status.includes('Processing') && (
               <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-bold hover:from-blue-600 hover:to-indigo-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-blue-500 text-white font-bold hover:bg-blue-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={nextQuestion}
               >
                 <Play className="w-6 h-6" />
@@ -668,7 +668,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
             {/* Go to Summary button for last question */}
             {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Processing') && (
               <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-purple-500 text-white font-bold hover:bg-purple-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />
@@ -679,7 +679,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
             {/* Manual Go to Summary button for last question when ready */}
             {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Ask Question') && (
               <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold hover:from-purple-600 hover:to-pink-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-purple-500 text-white font-bold hover:bg-purple-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />
@@ -690,7 +690,7 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
             {/* Go to Summary button after completing the last question */}
             {!isThinking && !isRecording && QUESTIONS.length > 0 && currentQuestion === QUESTIONS.length - 1 && status.includes('Interview completed') && (
               <button
-                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold hover:from-green-600 hover:to-emerald-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+                className="px-8 py-4 rounded-2xl bg-green-500 text-white font-bold hover:bg-green-600 transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
                 onClick={goToSummary}
               >
                 <Sparkles className="w-6 h-6" />

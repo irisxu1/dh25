@@ -98,7 +98,7 @@ function App() {
           </div>
           <button
             onClick={() => setSkipped(true)}
-            className="w-full bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white py-5 rounded-2xl font-bold text-2xl shadow-xl mb-6 transition-all transform hover:scale-105"
+            className="w-full bg-pink-500 hover:bg-pink-600 text-white py-5 rounded-2xl font-bold text-2xl shadow-xl mb-6 transition-all transform hover:scale-105"
           >
             ✨ Skip Sign In — Try Demo
           </button>
@@ -157,7 +157,7 @@ function App() {
                 </div>
                 <button
                   onClick={handleStartRecording}
-                  className="bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white px-16 py-6 rounded-2xl font-bold text-2xl transition-all transform hover:scale-105 shadow-xl"
+                  className="bg-pink-500 hover:bg-pink-600 text-white px-16 py-6 rounded-2xl font-bold text-2xl transition-all transform hover:scale-105 shadow-xl"
                 >
                   Start Practice Interview
                 </button>

@@ -174,7 +174,7 @@ const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }
           {onRedo && (
             <button
               onClick={onRedo}
-              className="bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white px-6 py-3 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
+              className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-3 rounded-2xl font-bold transition-all transform hover:scale-105 shadow-lg flex items-center gap-2"
             >
               <Heart className="w-5 h-5" /> Practice Again
             </button>
