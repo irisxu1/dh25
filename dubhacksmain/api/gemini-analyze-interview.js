@@ -1,14 +1,7 @@
 const { GoogleGenAI } = require("@google/genai");
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-
-if (!GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY environment variable is required');
-}
-
-const ai = new GoogleGenAI({
-  apiKey: GEMINI_API_KEY
-});
+const ai = GEMINI_API_KEY ? new GoogleGenAI({ apiKey: GEMINI_API_KEY }) : null;
 
 module.exports = async (req, res) => {
   // Enable CORS
@@ -31,6 +24,10 @@ module.exports = async (req, res) => {
 
     if (!fullTranscript || !company || questionCount === undefined) {
       return res.status(400).json({ error: 'Missing required parameters: fullTranscript, company, questionCount' });
+    }
+
+    if (!ai) {
+      return res.status(200).json(generateMockAnalysis(fullTranscript, company, questionCount, true));
     }
 
     const prompt = `You are an expert interview coach. Analyze the following interview transcript for a ${company} interview, which had ${questionCount} questions.
