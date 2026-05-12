@@ -55,7 +55,7 @@ All scores must be whole numbers. Return only valid JSON with no markdown.`;
         model: 'gemini-2.5-flash',
         contents: prompt,
       });
-      const text = result.text;
+      const text = result.text ?? '';
       try {
         return JSON.parse(text);
       } catch {
