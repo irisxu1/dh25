@@ -68,8 +68,6 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestionRef = useRef<number>(0);
-  const speechRecognitionRef = useRef<any>(null);
-  const transcriptionsRef = useRef<Record<number, string>>({});
 
   // Update the ref whenever currentQuestion changes
   useEffect(() => {
@@ -199,53 +197,12 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
       isMounted = false;
       if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
       if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      if (speechRecognitionRef.current) {
-        try { speechRecognitionRef.current.stop(); } catch {}
-      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, [company, QUESTIONS]); // Added company and QUESTIONS dependencies
 
-  // Helper function to extract audio from video for transcription
-  const extractAudioFromVideo = async (videoBlob: Blob): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-      console.log('Extracting audio from video blob:', videoBlob.size, 'bytes, type:', videoBlob.type);
-      
-      const video = document.createElement('video');
-      // const canvas = document.createElement('canvas');
-      // const audioContext = new AudioContext();
-      
-      video.src = URL.createObjectURL(videoBlob);
-      
-      video.onloadedmetadata = () => {
-        console.log('Video metadata loaded:', {
-          duration: video.duration,
-          videoWidth: video.videoWidth,
-          videoHeight: video.videoHeight
-        });
-        
-        // For now, return the video blob as audio
-        // In a real implementation, you'd extract just the audio track
-        // This is a simplified approach - the backend will handle the audio extraction
-        resolve(videoBlob);
-      };
-      
-      video.onerror = (error) => {
-        console.error('Error loading video for audio extraction:', error);
-        reject(new Error('Failed to load video for audio extraction'));
-      };
-      
-      // Set a timeout to prevent hanging
-      setTimeout(() => {
-        if (!video.duration) {
-          console.warn('Video metadata loading timed out, using video blob directly');
-          resolve(videoBlob);
-        }
-      }, 5000);
-    });
-  };
 
   const askQuestion = async () => {
     console.log('Ask question called - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'QUESTIONS array:', QUESTIONS);
@@ -328,29 +285,6 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     setStatus('Recording your answer...');
       chunksRef.current = [];
 
-    // Start real-time speech recognition
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.continuous = true;
-        recognition.interimResults = false;
-        recognition.lang = 'en-US';
-        recognition.onresult = (event: any) => {
-          let text = '';
-          for (let i = 0; i < event.results.length; i++) {
-            text += event.results[i][0].transcript + ' ';
-          }
-          transcriptionsRef.current[currentQuestionRef.current] = text.trim();
-        };
-        recognition.onerror = (e: any) => console.warn('Speech recognition error:', e.error);
-        recognition.start();
-        speechRecognitionRef.current = recognition;
-      } catch (e) {
-        console.warn('Speech recognition unavailable:', e);
-      }
-    }
-
     // Start recording timer immediately
     recordingTimerRef.current = setInterval(() => {
       setRecordingTime(prev => prev + 1);
@@ -383,12 +317,6 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     
     setIsRecording(false);
     setStatus('Processing your answer...');
-
-    // Stop speech recognition
-    if (speechRecognitionRef.current) {
-      try { speechRecognitionRef.current.stop(); } catch {}
-      speechRecognitionRef.current = null;
-    }
 
     // Stop recording timer
     if (recordingTimerRef.current) {
@@ -428,23 +356,24 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   };
 
   const analyzeInterview = async () => {
-    setStatus('Building transcript from your answers...');
+    setStatus('Transcribing your answers...');
 
     try {
-      // Build transcript from Web Speech API transcriptions captured during recording
       let fullTranscript = '';
-      const recordingsToUse = recordings.length > 0 ? recordings : QUESTIONS.map((q, i) => ({
-        questionNumber: i + 1,
-        question: q,
-        videoBlob: null,
-        videoUrl: '',
-        size: 0,
-        fileName: ''
-      }));
 
-      for (const recording of recordingsToUse) {
-        const qNum = recording.questionNumber - 1;
-        const answerText = transcriptionsRef.current[qNum] || '[No speech detected]';
+      for (let i = 0; i < recordings.length; i++) {
+        const recording = recordings[i];
+        setStatus(`Transcribing answer ${i + 1} of ${recordings.length}...`);
+
+        let answerText = '[No speech detected]';
+        try {
+          const transcription = await elevenLabsService.speechToText(recording.videoBlob);
+          answerText = transcription || '[No speech detected]';
+        } catch (err) {
+          console.error(`Transcription failed for Q${recording.questionNumber}:`, err);
+          answerText = '[Transcription failed]';
+        }
+
         fullTranscript += `Q${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: ${answerText}\n\n`;
       }
 
