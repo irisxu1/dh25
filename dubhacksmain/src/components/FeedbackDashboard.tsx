@@ -46,7 +46,7 @@ interface FeedbackDashboardProps {
 }
 
 const FeedbackDashboard: React.FC<FeedbackDashboardProps> = ({ results, onRedo }) => {
-  const { transcript, recordings, metrics, questionAnalysis, summary, decision, company } = results;
+  const { transcript, recordings, metrics = { fillerWords: 0, speakingRateWpm: 0 }, questionAnalysis, summary = '', decision = { pass: false, rationale: '' }, company } = results;
 
 
   // Parse transcript to extract Q&A pairs

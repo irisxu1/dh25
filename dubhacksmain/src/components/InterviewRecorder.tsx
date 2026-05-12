@@ -68,6 +68,8 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   const thinkingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
   const currentQuestionRef = useRef<number>(0);
+  const speechRecognitionRef = useRef<any>(null);
+  const transcriptionsRef = useRef<Record<number, string>>({});
 
   // Update the ref whenever currentQuestion changes
   useEffect(() => {
@@ -195,11 +197,10 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     // Cleanup function
     return () => {
       isMounted = false;
-      if (thinkingTimerRef.current) {
-        clearInterval(thinkingTimerRef.current);
-      }
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
+      if (thinkingTimerRef.current) clearInterval(thinkingTimerRef.current);
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (speechRecognitionRef.current) {
+        try { speechRecognitionRef.current.stop(); } catch {}
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
@@ -320,12 +321,35 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
     }
-    
+
     // Always set recording state to true first, regardless of MediaRecorder state
     setIsRecording(true);
     setRecordingTime(0);
     setStatus('Recording your answer...');
       chunksRef.current = [];
+
+    // Start real-time speech recognition
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = false;
+        recognition.lang = 'en-US';
+        recognition.onresult = (event: any) => {
+          let text = '';
+          for (let i = 0; i < event.results.length; i++) {
+            text += event.results[i][0].transcript + ' ';
+          }
+          transcriptionsRef.current[currentQuestionRef.current] = text.trim();
+        };
+        recognition.onerror = (e: any) => console.warn('Speech recognition error:', e.error);
+        recognition.start();
+        speechRecognitionRef.current = recognition;
+      } catch (e) {
+        console.warn('Speech recognition unavailable:', e);
+      }
+    }
 
     // Start recording timer immediately
     recordingTimerRef.current = setInterval(() => {
@@ -359,7 +383,13 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
     
     setIsRecording(false);
     setStatus('Processing your answer...');
-    
+
+    // Stop speech recognition
+    if (speechRecognitionRef.current) {
+      try { speechRecognitionRef.current.stop(); } catch {}
+      speechRecognitionRef.current = null;
+    }
+
     // Stop recording timer
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
@@ -398,145 +428,50 @@ export default function InterviewRecorder({ company, onStop, onCancel }: Intervi
   };
 
   const analyzeInterview = async () => {
-    console.log('Analyzing interview - currentQuestion:', currentQuestion, 'QUESTIONS.length:', QUESTIONS.length, 'recordings count:', recordings.length);
-    
-    setStatus('Transcribing all your answers...');
-    
+    setStatus('Building transcript from your answers...');
+
     try {
-      // Transcribe all recordings using ElevenLabs
+      // Build transcript from Web Speech API transcriptions captured during recording
       let fullTranscript = '';
-      
-      for (let i = 0; i < recordings.length; i++) {
-        const recording = recordings[i];
-        setStatus(`Transcribing answer ${i + 1} of ${recordings.length}...`);
-        
-        try {
-          // Extract audio from video and transcribe
-          const audioBlob = await extractAudioFromVideo(recording.videoBlob);
-          console.log(`Extracted audio for Q${recording.questionNumber}:`, audioBlob.size, 'bytes');
-          
-          const transcription = await elevenLabsService.speechToText(audioBlob);
-          const answerText = transcription || '[No speech detected]';
-          
-          console.log(`Transcription for Q${recording.questionNumber}:`, answerText);
-          
-          // Save transcription to file for debugging
-          const transcriptionData = {
-            questionNumber: recording.questionNumber,
-            question: recording.question,
-            transcription: answerText,
-            audioSize: audioBlob.size,
-            timestamp: new Date().toISOString(),
-            fileName: recording.fileName
-          };
-          
-          // Save as JSON file
-          const transcriptionBlob = new Blob([JSON.stringify(transcriptionData, null, 2)], { type: 'application/json' });
-          const transcriptionUrl = URL.createObjectURL(transcriptionBlob);
-          const transcriptionFileName = `transcription_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.json`;
-          
-          const transcriptionLink = document.createElement('a');
-          transcriptionLink.href = transcriptionUrl;
-          transcriptionLink.download = transcriptionFileName;
-          document.body.appendChild(transcriptionLink);
-          transcriptionLink.click();
-          document.body.removeChild(transcriptionLink);
-          
-          // Also save as text file
-          const textBlob = new Blob([`Question ${recording.questionNumber}: ${recording.question}\n\nAnswer: ${answerText}\n\nAudio Size: ${audioBlob.size} bytes\nTimestamp: ${new Date().toISOString()}`], { type: 'text/plain' });
-          const textUrl = URL.createObjectURL(textBlob);
-          const textFileName = `transcription_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.txt`;
-          
-          const textLink = document.createElement('a');
-          textLink.href = textUrl;
-          textLink.download = textFileName;
-          document.body.appendChild(textLink);
-          textLink.click();
-          document.body.removeChild(textLink);
-          
-          console.log(`Saved transcription files for Q${recording.questionNumber}: ${transcriptionFileName} and ${textFileName}`);
-          
-          // Add to transcript
-          fullTranscript += `\nQ${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: ${answerText}\n`;
-        } catch (error) {
-          console.error(`Transcription failed for question ${recording.questionNumber}:`, error);
-          
-          // Save error information to file
-          const errorData = {
-            questionNumber: recording.questionNumber,
-            question: recording.question,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date().toISOString(),
-            fileName: recording.fileName
-          };
-          
-          const errorBlob = new Blob([JSON.stringify(errorData, null, 2)], { type: 'application/json' });
-          const errorUrl = URL.createObjectURL(errorBlob);
-          const errorFileName = `transcription_error_q${recording.questionNumber}_${company.toLowerCase().replace(/\s+/g, '')}.json`;
-          
-          const errorLink = document.createElement('a');
-          errorLink.href = errorUrl;
-          errorLink.download = errorFileName;
-          document.body.appendChild(errorLink);
-          errorLink.click();
-          document.body.removeChild(errorLink);
-          
-          console.log(`Saved error file for Q${recording.questionNumber}: ${errorFileName}`);
-          
-          fullTranscript += `\nQ${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: [Transcription failed: ${error instanceof Error ? error.message : 'Unknown error'}]\n`;
-        }
+      const recordingsToUse = recordings.length > 0 ? recordings : QUESTIONS.map((q, i) => ({
+        questionNumber: i + 1,
+        question: q,
+        videoBlob: null,
+        videoUrl: '',
+        size: 0,
+        fileName: ''
+      }));
+
+      for (const recording of recordingsToUse) {
+        const qNum = recording.questionNumber - 1;
+        const answerText = transcriptionsRef.current[qNum] || '[No speech detected]';
+        fullTranscript += `Q${recording.questionNumber}: ${recording.question}\nA${recording.questionNumber}: ${answerText}\n\n`;
       }
-      
-      setStatus('Analyzing your interview responses...');
-      
-      // Save complete transcript summary for debugging
-      const summaryData = {
-        company: company,
-        totalQuestions: QUESTIONS.length,
-        totalRecordings: recordings.length,
-        fullTranscript: fullTranscript,
-        recordings: recordings.map(r => ({
-          questionNumber: r.questionNumber,
-          question: r.question,
-          fileName: r.fileName,
-          size: r.size
-        })),
-        timestamp: new Date().toISOString()
-      };
-      
-      const summaryBlob = new Blob([JSON.stringify(summaryData, null, 2)], { type: 'application/json' });
-      const summaryUrl = URL.createObjectURL(summaryBlob);
-      const summaryFileName = `interview_summary_${company.toLowerCase().replace(/\s+/g, '')}_${new Date().toISOString().split('T')[0]}.json`;
-      
-      const summaryLink = document.createElement('a');
-      summaryLink.href = summaryUrl;
-      summaryLink.download = summaryFileName;
-      document.body.appendChild(summaryLink);
-      summaryLink.click();
-      document.body.removeChild(summaryLink);
-      
-      console.log(`Saved interview summary: ${summaryFileName}`);
-      
-      // Now analyze the complete transcript using Gemini
+
+      setStatus('Analyzing your interview responses with AI...');
+
       const analysis = await geminiService.analyzeInterview(fullTranscript, company, QUESTIONS.length);
 
       onStop({
         company,
         transcript: fullTranscript,
         recordings,
-        ...analysis,
+        metrics: analysis.metrics || { fillerWords: 0, speakingRateWpm: 0 },
+        summary: analysis.summary || '',
+        decision: analysis.decision || { pass: false, rationale: '' },
+        questionAnalysis: analysis.questionAnalysis || [],
         createdAt: new Date().toISOString()
       });
     } catch (error) {
       console.error('Analysis failed:', error);
       onStop({
         company,
-        transcript: 'Analysis failed - could not transcribe recordings',
+        transcript: '',
         recordings,
-        summary: 'Analysis failed',
         metrics: { fillerWords: 0, speakingRateWpm: 0 },
+        summary: 'Analysis failed. Please try again.',
         questionAnalysis: [],
-        decision: { pass: false, rationale: 'Analysis failed' }
+        decision: { pass: false, rationale: 'Analysis could not be completed.' }
       });
     }
   };
