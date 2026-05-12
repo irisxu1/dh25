@@ -1,44 +1,32 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
-
 const ELEVENLABS_API_KEY = process.env.REACT_APP_ELEVENLABS_API_KEY;
-
-function getClient() {
-  if (!ELEVENLABS_API_KEY) {
-    console.warn('REACT_APP_ELEVENLABS_API_KEY not set');
-    return null;
-  }
-  return new ElevenLabsClient({ apiKey: ELEVENLABS_API_KEY });
-}
+const BASE_URL = 'https://api.elevenlabs.io/v1';
 
 class ElevenLabsService {
   async textToSpeech(text: string, voiceId: string = 'pNInz6obpgDQGcFmaJgB'): Promise<string> {
-    const client = getClient();
-    if (!client) throw new Error('ElevenLabs API key not configured');
+    if (!ELEVENLABS_API_KEY) throw new Error('REACT_APP_ELEVENLABS_API_KEY not set');
 
-    const audioStream = await client.textToSpeech.convert(voiceId, {
-      text,
-      model_id: 'eleven_monolingual_v1',
-      output_format: 'mp3_44100_128',
+    const response = await fetch(`${BASE_URL}/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_monolingual_v1',
+        output_format: 'mp3_44100_128',
+      }),
     });
 
-    // Collect stream into bytes
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of audioStream as AsyncIterable<Uint8Array>) {
-      chunks.push(chunk);
-    }
-    const total = chunks.reduce((n, c) => n + c.length, 0);
-    const merged = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-      merged.set(chunk, offset);
-      offset += chunk.length;
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`ElevenLabs TTS failed: ${response.status} ${err}`);
     }
 
-    // Convert to base64
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
     let binary = '';
-    for (let i = 0; i < merged.length; i++) {
-      binary += String.fromCharCode(merged[i]);
-    }
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
   }
 
@@ -58,19 +46,29 @@ class ElevenLabsService {
   }
 
   async speechToText(audioBlob: Blob): Promise<string> {
-    const client = getClient();
-    if (!client) throw new Error('ElevenLabs API key not configured');
+    if (!ELEVENLABS_API_KEY) throw new Error('REACT_APP_ELEVENLABS_API_KEY not set');
 
     console.log('Starting ElevenLabs speech-to-text:', { size: audioBlob.size, type: audioBlob.type });
 
-    const file = new File([audioBlob], 'audio.webm', { type: audioBlob.type || 'audio/webm' });
+    const formData = new FormData();
+    formData.append('file', new File([audioBlob], 'audio.webm', { type: audioBlob.type || 'audio/webm' }));
+    formData.append('model_id', 'scribe_v1');
 
-    const result = await client.speechToText.convert({
-      file,
-      model_id: 'scribe_v1',
+    const response = await fetch(`${BASE_URL}/speech-to-text`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': ELEVENLABS_API_KEY,
+      },
+      body: formData,
     });
 
-    return result.text || '';
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`ElevenLabs STT failed: ${response.status} ${err}`);
+    }
+
+    const data = await response.json();
+    return data.text || '';
   }
 }
 
